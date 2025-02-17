@@ -1,6 +1,18 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, TextInput } from "react-native";
-import { getStudents, addStudent, deleteStudent, editStudent } from "../../lib/students";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+} from "react-native";
+import {
+  getStudents,
+  addStudent,
+  deleteStudent,
+  editStudent,
+} from "../../lib/students";
+import { useRouter } from "expo-router";
 
 type Student = {
   id: string;
@@ -14,6 +26,7 @@ export default function HomeScreen() {
   const [students, setStudents] = useState<Student[]>([]);
   const [editingStudent, setEditingStudent] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     fetchStudents();
@@ -28,7 +41,6 @@ export default function HomeScreen() {
       }))
     );
   };
-  
 
   const handleAddStudent = async () => {
     await addStudent({
@@ -55,7 +67,9 @@ export default function HomeScreen() {
 
   return (
     <View style={{ padding: 20 }}>
-      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 10 }}>Students</Text>
+      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 10 }}>
+        Students
+      </Text>
 
       <FlatList
         data={students}
@@ -84,16 +98,32 @@ export default function HomeScreen() {
                 />
                 <TouchableOpacity
                   onPress={() => handleEditStudent(item.id)}
-                  style={{ backgroundColor: "green", padding: 5, borderRadius: 5 }}
+                  style={{
+                    backgroundColor: "green",
+                    padding: 5,
+                    borderRadius: 5,
+                  }}
                 >
-                  <Text style={{ color: "white", textAlign: "center" }}>Save</Text>
+                  <Text style={{ color: "white", textAlign: "center" }}>
+                    Save
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => router.push(`/student/${item.id}`)}
+                >
+                  <Text style={{ color: "blue", marginTop: 5 }}>
+                    View Sessions
+                  </Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 <Text style={{ fontSize: 18 }}>{item.name}</Text>
                 <Text>Subject: {item.subject}</Text>
-                <Text>Next Session: {new Date(item.next_session_date).toLocaleString()}</Text>
+                <Text>
+                  Next Session:{" "}
+                  {new Date(item.next_session_date).toLocaleString()}
+                </Text>
                 <TouchableOpacity
                   onPress={() => {
                     setEditingStudent(item.id);

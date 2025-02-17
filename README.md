@@ -48,3 +48,32 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+Tables created
+
+```
+create table students (
+   id uuid default uuid_generate_v4() primary key,
+   tutor_id text not null,
+   name text not null,
+   subject text not null,
+   next_session_date timestamp,
+   created_at timestamp default now()
+);
+```
+
+```
+create table session_notes (
+    id uuid default uuid_generate_v4() primary key,
+    student_id uuid references students(id) on delete cascade,
+    session_date timestamp not null,
+    subject text not null,
+    topic text not null,
+    lesson_summary text,
+    homework_assigned text,
+    engagement_level text check (engagement_level in ('Highly Engaged', 'Engaged', 'Neutral', 'Distracted')),
+    tutor_notes text,
+    parent_feedback text,
+    created_at timestamp default now()
+);
+```
