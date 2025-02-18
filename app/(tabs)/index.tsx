@@ -1,11 +1,7 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-} from "react-native";
+import { View, Text } from "react-native";
+import { FlatList, TouchableOpacity } from "react-native";
+import { TextInput, Card, Button as PaperButton, IconButton } from "react-native-paper";
 import {
   getStudents,
   addStudent,
@@ -75,84 +71,69 @@ export default function HomeScreen() {
         data={students}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View
-            style={{
-              padding: 15,
-              backgroundColor: "#f2f2f2",
-              marginBottom: 10,
-              borderRadius: 10,
-            }}
-          >
-            {editingStudent === item.id ? (
-              <>
-                <TextInput
-                  value={newName}
-                  onChangeText={setNewName}
-                  style={{
-                    borderColor: "#ccc",
-                    borderWidth: 1,
-                    padding: 8,
-                    marginBottom: 5,
-                  }}
-                  placeholder="Enter new name"
-                />
-                <TouchableOpacity
-                  onPress={() => handleEditStudent(item.id)}
-                  style={{
-                    backgroundColor: "green",
-                    padding: 5,
-                    borderRadius: 5,
-                  }}
-                >
-                  <Text style={{ color: "white", textAlign: "center" }}>
+          <Card style={{ marginBottom: 10 }}>
+            <Card.Content>
+              {editingStudent === item.id ? (
+                <>
+                  <TextInput
+                    label="Enter new name"
+                    value={newName}
+                    onChangeText={setNewName}
+                    mode="outlined"
+                    style={{ marginBottom: 5 }}
+                  />
+                  <PaperButton
+                    mode="contained"
+                    onPress={() => handleEditStudent(item.id)}
+                    style={{ marginBottom: 5 }}
+                  >
                     Save
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => router.push(`/student/${item.id}`)}
-                >
-                  <Text style={{ color: "blue", marginTop: 5 }}>
-                    View Sessions
-                  </Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <Text style={{ fontSize: 18 }}>{item.name}</Text>
-                <Text>Subject: {item.subject}</Text>
-                <Text>
-                  Next Session:{" "}
-                  {new Date(item.next_session_date).toLocaleString()}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setEditingStudent(item.id);
-                    setNewName(item.name);
-                  }}
-                >
-                  <Text style={{ color: "blue", marginTop: 5 }}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteStudent(item.id)}>
-                  <Text style={{ color: "red", marginTop: 5 }}>Delete</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
+                  </PaperButton>
+                  <TouchableOpacity
+                    onPress={() => router.push(`/student/${item.id}`)}
+                  >
+                    <Text style={{ color: "blue", marginTop: 5 }}>
+                      View Sessions
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View>
+                      <Text style={{ fontSize: 18 }}>{item.name}</Text>
+                      <Text>Subject: {item.subject}</Text>
+                      <Text>
+                        Next Session:{" "}
+                        {new Date(item.next_session_date).toLocaleString()}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row' }}>
+                      <IconButton
+                        icon="pencil"
+                        size={20}
+                        onPress={() => {
+                          setEditingStudent(item.id);
+                          setNewName(item.name);
+                        }}
+                      />
+                      <IconButton
+                        icon="trash-can"
+                        size={20}
+                        onPress={() => handleDeleteStudent(item.id)}
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
+            </Card.Content>
+          </Card>
         )}
       />
 
-      <TouchableOpacity
-        onPress={handleAddStudent}
-        style={{
-          backgroundColor: "blue",
-          padding: 15,
-          borderRadius: 10,
-          marginTop: 10,
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ color: "white", fontWeight: "bold" }}>Add Student</Text>
-      </TouchableOpacity>
+      <PaperButton mode="contained" onPress={handleAddStudent}>
+        Add Student
+      </PaperButton>
     </View>
   );
 }
