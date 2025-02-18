@@ -19,13 +19,39 @@ export const getStudents = async (): Promise<Student[]> => {
 };
 
 // Add a new student
-export const addStudent = async (student: Omit<Student, "id">) => {
-  const { data, error } = await supabase.from("students").insert([student]);
-  if (error) {
+export async function addStudent(student: Omit<Student, "id">): Promise<Student | null> {
+  const { data, error } = await supabase
+    .from("students")
+    .insert([student])
+    .select(); // Ensure we get the inserted data back
+
+  if (error || !data || data.length === 0) {
     console.error("Error adding student:", error);
+    return null;
   }
-  return data;
-};
+
+  const newStudent = data[0];
+
+  // Generate a unique student code
+  const studentCode = generateStudentCode();
+
+  // Insert the student code into the student_codes table
+  const { error: codeError } = await supabase
+    .from("student_codes")
+    .insert([{ student_id: newStudent.id, code: studentCode }]);
+
+  if (codeError) {
+    console.error("Error adding student code:", codeError);
+    return null;
+  }
+
+  return newStudent;
+}
+
+function generateStudentCode() {
+  // Implement a logic to generate a unique student code
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
 
 // Delete student
 export const deleteStudent = async (id: string) => {

@@ -44,3 +44,32 @@ export const deleteSessionNote = async (id: string) => {
     console.error("Error deleting session note:", error);
   }
 };
+
+export async function getSessionNotesByCode(code: string) {
+  const { data, error } = await supabase
+    .from("session_notes")
+    .select("*")
+    .eq("student_id", (await getStudentIdByCode(code)) || "");
+
+  if (error) {
+    console.error("Error fetching session notes:", error);
+    return null;
+  }
+
+  return data;
+}
+
+async function getStudentIdByCode(code: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("student_codes")
+    .select("student_id")
+    .eq("code", code)
+    .single();
+
+  if (error) {
+    console.error("Error fetching student ID by code:", error);
+    return null;
+  }
+
+  return data?.student_id || null;
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text } from "react-native";
+import { View, Text, Alert } from "react-native";
 import { FlatList, TouchableOpacity, Modal } from "react-native";
 import {
   TextInput,
@@ -14,6 +14,7 @@ import {
   editStudent,
 } from "../../lib/students";
 import { useRouter } from "expo-router";
+import { getStudentCode } from "../../lib/studentCodes";
 
 type Student = {
   id: string;
@@ -71,6 +72,16 @@ export default function HomeScreen() {
       await editStudent(id, newName);
       setEditingStudent(null);
       fetchStudents();
+    }
+  };
+
+  const handleMoreInfo = async (studentId: string) => {
+    const code = await getStudentCode(studentId);
+    console.log("Student Code:", code);
+    if (code) {
+      Alert.alert("Student Code", `The student code is: ${code}`);
+    } else {
+      Alert.alert("Error", "Could not retrieve student code.");
     }
   };
 
@@ -144,6 +155,11 @@ export default function HomeScreen() {
                           icon="trash-can"
                           size={20}
                           onPress={() => handleDeleteStudent(item.id)}
+                        />
+                        <IconButton
+                          icon="information"
+                          size={20}
+                          onPress={() => handleMoreInfo(item.id)}
                         />
                       </View>
                     </View>
