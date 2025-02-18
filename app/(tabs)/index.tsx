@@ -1,15 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Modal, Platform } from "react-native";
-import { FlatList, TouchableOpacity } from "react-native";
+import { View, Text } from "react-native";
+import { FlatList, TouchableOpacity, Modal } from "react-native";
 import {
   TextInput,
   Card,
   Button as PaperButton,
   IconButton,
 } from "react-native-paper";
-import DateTimePickerModal from "react-native-modal-datetime-picker";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
 import {
   getStudents,
   addStudent,
@@ -33,8 +30,6 @@ export default function HomeScreen() {
   const [newSubject, setNewSubject] = useState("");
   const [nextSessionDate, setNextSessionDate] = useState(new Date());
   const [modalVisible, setModalVisible] = useState(false);
-  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [isTimePickerVisible, setTimePickerVisibility] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -79,35 +74,6 @@ export default function HomeScreen() {
     }
   };
 
-  const showDatePicker = () => {
-    setDatePickerVisibility(true);
-  };
-
-  const hideDatePicker = () => {
-    setDatePickerVisibility(false);
-  };
-
-  const handleConfirmDate = (date: Date) => {
-    setNextSessionDate(date);
-    hideDatePicker();
-  };
-
-  const showTimePicker = () => {
-    setTimePickerVisibility(true);
-  };
-
-  const hideTimePicker = () => {
-    setTimePickerVisibility(false);
-  };
-
-  const handleConfirmTime = (time: Date) => {
-    const currentDate = new Date(nextSessionDate);
-    currentDate.setHours(time.getHours());
-    currentDate.setMinutes(time.getMinutes());
-    setNextSessionDate(currentDate);
-    hideTimePicker();
-  };
-
   return (
     <View style={{ padding: 20 }}>
       <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 10 }}>
@@ -118,68 +84,73 @@ export default function HomeScreen() {
         data={students}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <Card style={{ marginBottom: 10 }}>
-            <Card.Content>
-              {editingStudent === item.id ? (
-                <>
-                  <TextInput
-                    label="Enter new name"
-                    value={newName}
-                    onChangeText={setNewName}
-                    mode="outlined"
-                    style={{ marginBottom: 5 }}
-                  />
-                  <PaperButton
-                    mode="contained"
-                    onPress={() => handleEditStudent(item.id)}
-                    style={{ marginBottom: 5 }}
-                  >
-                    Save
-                  </PaperButton>
-                  <TouchableOpacity
-                    onPress={() => router.push(`/student/${item.id}`)}
-                  >
-                    <Text style={{ color: "blue", marginTop: 5 }}>
-                      View Sessions
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <View>
-                      <Text style={{ fontSize: 18 }}>{item.name}</Text>
-                      <Text>Subject: {item.subject}</Text>
-                      <Text>
-                        Next Session:{" "}
-                        {new Date(item.next_session_date).toLocaleString()}
+          <Card style={{ marginBottom: 15, marginHorizontal: 10, padding: 10 }}>
+            <TouchableOpacity
+              onPress={() => router.push(`/student/${item.id}`)}
+              style={{ flex: 1 }}
+            >
+              <Card.Content>
+                {editingStudent === item.id ? (
+                  <>
+                    <TextInput
+                      label="Enter new name"
+                      value={newName}
+                      onChangeText={setNewName}
+                      mode="outlined"
+                      style={{ marginBottom: 5 }}
+                    />
+                    <PaperButton
+                      mode="contained"
+                      onPress={() => handleEditStudent(item.id)}
+                      style={{ marginBottom: 5 }}
+                    >
+                      Save
+                    </PaperButton>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/student/${item.id}`)}
+                    >
+                      <Text style={{ color: "blue", marginTop: 5 }}>
+                        View Sessions
                       </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <View>
+                        <Text style={{ fontSize: 18 }}>{item.name}</Text>
+                        <Text>Subject: {item.subject}</Text>
+                        <Text>
+                          Next Session:{" "}
+                          {new Date(item.next_session_date).toLocaleString()}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: "row" }}>
+                        <IconButton
+                          icon="pencil"
+                          size={20}
+                          onPress={() => {
+                            setEditingStudent(item.id);
+                            setNewName(item.name);
+                          }}
+                        />
+                        <IconButton
+                          icon="trash-can"
+                          size={20}
+                          onPress={() => handleDeleteStudent(item.id)}
+                        />
+                      </View>
                     </View>
-                    <View style={{ flexDirection: "row" }}>
-                      <IconButton
-                        icon="pencil"
-                        size={20}
-                        onPress={() => {
-                          setEditingStudent(item.id);
-                          setNewName(item.name);
-                        }}
-                      />
-                      <IconButton
-                        icon="trash-can"
-                        size={20}
-                        onPress={() => handleDeleteStudent(item.id)}
-                      />
-                    </View>
-                  </View>
-                </>
-              )}
-            </Card.Content>
+                  </>
+                )}
+              </Card.Content>
+            </TouchableOpacity>
           </Card>
         )}
       />
@@ -206,24 +177,6 @@ export default function HomeScreen() {
             onChangeText={setNewSubject}
             mode="outlined"
             style={{ marginBottom: 10 }}
-          />
-          <PaperButton onPress={showDatePicker} style={{ marginBottom: 10 }}>
-            Select Date
-          </PaperButton>
-          <DateTimePickerModal
-            isVisible={isDatePickerVisible}
-            mode="date"
-            onConfirm={handleConfirmDate}
-            onCancel={hideDatePicker}
-          />
-          <PaperButton onPress={showTimePicker} style={{ marginBottom: 10 }}>
-            Select Time
-          </PaperButton>
-          <DateTimePickerModal
-            isVisible={isTimePickerVisible}
-            mode="time"
-            onConfirm={handleConfirmTime}
-            onCancel={hideTimePicker}
           />
           <PaperButton
             mode="contained"
