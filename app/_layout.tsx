@@ -14,6 +14,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="screens/LoginScreen" options={{ title: "Login" }} />
           <Stack.Screen name="screens/RegisterScreen" options={{ title: "Register" }} />
+          <Stack.Screen name="screens/ParentScreen" options={{ title: "Parent Dashboard" }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
