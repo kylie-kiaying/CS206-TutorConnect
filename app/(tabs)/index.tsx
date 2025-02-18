@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { View, Text } from "react-native";
+import { View, Text, Modal, Platform } from "react-native";
 import { FlatList, TouchableOpacity } from "react-native";
-import { TextInput, Card, Button as PaperButton, IconButton } from "react-native-paper";
+import {
+  TextInput,
+  Card,
+  Button as PaperButton,
+  IconButton,
+} from "react-native-paper";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import {
   getStudents,
   addStudent,
@@ -22,6 +30,11 @@ export default function HomeScreen() {
   const [students, setStudents] = useState<Student[]>([]);
   const [editingStudent, setEditingStudent] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [newSubject, setNewSubject] = useState("");
+  const [nextSessionDate, setNextSessionDate] = useState(new Date());
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [isTimePickerVisible, setTimePickerVisibility] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -39,13 +52,18 @@ export default function HomeScreen() {
   };
 
   const handleAddStudent = async () => {
-    await addStudent({
-      tutor_id: "123", // Static ID for now
-      name: "New Student",
-      subject: "Math",
-      next_session_date: new Date().toISOString(),
-    });
-    fetchStudents();
+    if (newName.trim() && newSubject.trim()) {
+      await addStudent({
+        tutor_id: "123", // Static ID for now
+        name: newName,
+        subject: newSubject,
+        next_session_date: nextSessionDate.toISOString(),
+      });
+      fetchStudents();
+      setModalVisible(false);
+      setNewName("");
+      setNewSubject("");
+    }
   };
 
   const handleDeleteStudent = async (id: string) => {
@@ -59,6 +77,35 @@ export default function HomeScreen() {
       setEditingStudent(null);
       fetchStudents();
     }
+  };
+
+  const showDatePicker = () => {
+    setDatePickerVisibility(true);
+  };
+
+  const hideDatePicker = () => {
+    setDatePickerVisibility(false);
+  };
+
+  const handleConfirmDate = (date: Date) => {
+    setNextSessionDate(date);
+    hideDatePicker();
+  };
+
+  const showTimePicker = () => {
+    setTimePickerVisibility(true);
+  };
+
+  const hideTimePicker = () => {
+    setTimePickerVisibility(false);
+  };
+
+  const handleConfirmTime = (time: Date) => {
+    const currentDate = new Date(nextSessionDate);
+    currentDate.setHours(time.getHours());
+    currentDate.setMinutes(time.getMinutes());
+    setNextSessionDate(currentDate);
+    hideTimePicker();
   };
 
   return (
@@ -99,7 +146,13 @@ export default function HomeScreen() {
                 </>
               ) : (
                 <>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <View>
                       <Text style={{ fontSize: 18 }}>{item.name}</Text>
                       <Text>Subject: {item.subject}</Text>
@@ -108,7 +161,7 @@ export default function HomeScreen() {
                         {new Date(item.next_session_date).toLocaleString()}
                       </Text>
                     </View>
-                    <View style={{ flexDirection: 'row' }}>
+                    <View style={{ flexDirection: "row" }}>
                       <IconButton
                         icon="pencil"
                         size={20}
@@ -131,9 +184,63 @@ export default function HomeScreen() {
         )}
       />
 
-      <PaperButton mode="contained" onPress={handleAddStudent}>
+      <PaperButton mode="contained" onPress={() => setModalVisible(true)}>
         Add Student
       </PaperButton>
+
+      <Modal visible={modalVisible} animationType="slide">
+        <View style={{ padding: 20 }}>
+          <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>
+            Add New Student
+          </Text>
+          <TextInput
+            label="Name"
+            value={newName}
+            onChangeText={setNewName}
+            mode="outlined"
+            style={{ marginBottom: 10 }}
+          />
+          <TextInput
+            label="Subject"
+            value={newSubject}
+            onChangeText={setNewSubject}
+            mode="outlined"
+            style={{ marginBottom: 10 }}
+          />
+          <PaperButton onPress={showDatePicker} style={{ marginBottom: 10 }}>
+            Select Date
+          </PaperButton>
+          <DateTimePickerModal
+            isVisible={isDatePickerVisible}
+            mode="date"
+            onConfirm={handleConfirmDate}
+            onCancel={hideDatePicker}
+          />
+          <PaperButton onPress={showTimePicker} style={{ marginBottom: 10 }}>
+            Select Time
+          </PaperButton>
+          <DateTimePickerModal
+            isVisible={isTimePickerVisible}
+            mode="time"
+            onConfirm={handleConfirmTime}
+            onCancel={hideTimePicker}
+          />
+          <PaperButton
+            mode="contained"
+            onPress={handleAddStudent}
+            style={{ marginTop: 20 }}
+          >
+            Add Student
+          </PaperButton>
+          <PaperButton
+            mode="text"
+            onPress={() => setModalVisible(false)}
+            style={{ marginTop: 10 }}
+          >
+            Cancel
+          </PaperButton>
+        </View>
+      </Modal>
     </View>
   );
 }
