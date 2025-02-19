@@ -12,7 +12,7 @@ import {
   getSessionNotes,
   addSessionNote,
   deleteSessionNote,
-} from "../../lib/sessionNotes";
+} from "../../../lib/sessionNotes";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
 import ModalComponent from "react-native-modal";
