@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Button, StyleSheet } from "react-native";
-import { supabase } from "../../lib/supabase";
+import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { Provider as PaperProvider, Appbar, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
+import { supabase } from "../../lib/supabase";
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState("");
@@ -28,36 +29,41 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Register</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <View style={styles.roleContainer}>
-        <Button title="Tutor" onPress={() => setRole("tutor")} />
-        <Button title="Parent" onPress={() => setRole("parent")} />
-      </View>
-      {role === "parent" && (
-        <TextInput
+    <PaperProvider>
+      <Appbar.Header>
+        <Appbar.Content title="Register" />
+      </Appbar.Header>
+      <View style={styles.container}>
+        <Text style={styles.title}>Register</Text>
+        <PaperTextInput
           style={styles.input}
-          placeholder="Student Code"
-          value={studentCode}
-          onChangeText={setStudentCode}
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
         />
-      )}
-      <Button title="Register" onPress={handleRegister} />
-      <Button title="Back to Login" onPress={() => router.push("/login")} />
-    </View>
+        <PaperTextInput
+          style={styles.input}
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <View style={styles.roleContainer}>
+          <PaperButton mode="contained" onPress={() => setRole("tutor")}>Tutor</PaperButton>
+          <PaperButton mode="contained" onPress={() => setRole("parent")}>Parent</PaperButton>
+        </View>
+        {role === "parent" && (
+          <PaperTextInput
+            style={styles.input}
+            label="Student Code"
+            value={studentCode}
+            onChangeText={setStudentCode}
+          />
+        )}
+        <PaperButton mode="contained" onPress={handleRegister} style={styles.registerButton}>Register</PaperButton>
+        <PaperButton mode="outlined" onPress={() => router.push("/login")} style={styles.backButton}>Back to Login</PaperButton>
+      </View>
+    </PaperProvider>
   );
 }
 
@@ -74,15 +80,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   input: {
-    height: 40,
-    borderColor: "#ccc",
-    borderWidth: 1,
-    marginBottom: 10,
-    paddingHorizontal: 8,
+    height: 50,
+    marginBottom: 15,
   },
   roleContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
+    marginBottom: 30,
+  },
+  registerButton: {
     marginBottom: 20,
+  },
+  backButton: {
+    marginTop: 10,
   },
 });

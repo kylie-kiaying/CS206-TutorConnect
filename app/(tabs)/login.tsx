@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Button, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "expo-router";
+import { Provider as PaperProvider, Appbar, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -26,28 +27,33 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Login</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <View style={styles.roleContainer}>
-        <Button title="Tutor" onPress={() => setRole("tutor")} />
-        <Button title="Parent" onPress={() => setRole("parent")} />
+    <PaperProvider>
+      <Appbar.Header>
+        <Appbar.Content title="Login" />
+      </Appbar.Header>
+      <View style={styles.container}>
+        <Text style={styles.title}>Login</Text>
+        <PaperTextInput
+          style={styles.input}
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <PaperTextInput
+          style={styles.input}
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <View style={styles.roleContainer}>
+          <PaperButton mode="contained" onPress={() => setRole("tutor")}>Tutor</PaperButton>
+          <PaperButton mode="contained" onPress={() => setRole("parent")}>Parent</PaperButton>
+        </View>
+        <PaperButton mode="contained" onPress={handleLogin} style={styles.loginButton}>Login</PaperButton>
+        <PaperButton mode="outlined" onPress={() => router.push("/register")} style={styles.registerButton}>Register</PaperButton>
       </View>
-      <Button title="Login" onPress={handleLogin} />
-      <Button title="Register" onPress={() => router.push("/register")} />
-    </View>
+    </PaperProvider>
   );
 }
 
@@ -56,23 +62,30 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 20,
+    marginVertical: 20,
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    marginBottom: 20,
+    marginBottom: 30,
     textAlign: "center",
   },
   input: {
-    height: 40,
+    height: 50,
     borderColor: "#ccc",
     borderWidth: 1,
-    marginBottom: 10,
-    paddingHorizontal: 8,
+    marginBottom: 15,
+    paddingHorizontal: 10,
   },
   roleContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
+    marginBottom: 30,
+  },
+  loginButton: {
     marginBottom: 20,
+  },
+  registerButton: {
+    marginTop: 10,
   },
 });
