@@ -11,10 +11,10 @@ export default function RootLayout() {
     <PaperProvider>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="screens/LoginScreen" options={{ title: "Login" }} />
-          <Stack.Screen name="screens/RegisterScreen" options={{ title: "Register" }} />
-          <Stack.Screen name="screens/ParentScreen" options={{ title: "Parent Dashboard" }} />
+          <Stack.Screen name="tutor/home" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ title: "Login" }} />
+          <Stack.Screen name="register" options={{ title: "Register" }} />
+          <Stack.Screen name="parent/home" options={{ title: "Parent Dashboard" }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

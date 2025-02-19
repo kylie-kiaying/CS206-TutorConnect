@@ -3,33 +3,31 @@ import { View, Text, TextInput, Button, StyleSheet } from "react-native";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "expo-router";
 
-export default function RegisterScreen() {
+export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("tutor"); // Default role
-  const [studentCode, setStudentCode] = useState(""); // For parents
   const router = useRouter();
 
-  const handleRegister = async () => {
-    const { error } = await supabase.auth.signUp({
+  const handleLogin = async () => {
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     if (error) {
       alert(error.message);
     } else {
-      if (role === "parent" && studentCode.trim() === "") {
-        alert("Please enter a student code.");
-        return;
+      if (role === "tutor") {
+        router.push("/(tabs)");
+      } else {
+        router.push("/register");
       }
-      alert("Registration successful! Please check your email to confirm.");
-      router.push("/screens/LoginScreen");
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Register</Text>
+      <Text style={styles.title}>Login</Text>
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -47,16 +45,8 @@ export default function RegisterScreen() {
         <Button title="Tutor" onPress={() => setRole("tutor")} />
         <Button title="Parent" onPress={() => setRole("parent")} />
       </View>
-      {role === "parent" && (
-        <TextInput
-          style={styles.input}
-          placeholder="Student Code"
-          value={studentCode}
-          onChangeText={setStudentCode}
-        />
-      )}
-      <Button title="Register" onPress={handleRegister} />
-      <Button title="Back to Login" onPress={() => router.push("/screens/LoginScreen")} />
+      <Button title="Login" onPress={handleLogin} />
+      <Button title="Register" onPress={() => router.push("/register")} />
     </View>
   );
 }
