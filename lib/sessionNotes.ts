@@ -37,6 +37,18 @@ export const addSessionNote = async (sessionNote: Omit<SessionNote, "id">) => {
   return data;
 };
 
+// Update a session note
+export const updateSessionNote = async (sessionNote: SessionNote) => {
+  const { data, error } = await supabase
+    .from("session_notes")
+    .update(sessionNote)
+    .eq("id", sessionNote.id);
+  if (error) {
+    console.error("Error updating session note:", error);
+  }
+  return data;
+};
+
 // Delete a session note
 export const deleteSessionNote = async (id: string) => {
   const { error } = await supabase.from("session_notes").delete().eq("id", id);

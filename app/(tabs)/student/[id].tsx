@@ -18,12 +18,14 @@ import {
   getSessionNotes,
   addSessionNote,
   deleteSessionNote,
+  updateSessionNote,
 } from "../../../lib/sessionNotes";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
 
 type SessionNote = {
   id: string;
+  student_id: string;
   session_date: string;
   subject: string;
   topic: string;
@@ -42,6 +44,7 @@ export default function StudentView() {
   const [filteredNotes, setFilteredNotes] = useState<SessionNote[]>([]);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [editingNote, setEditingNote] = useState<SessionNote | null>(null);
 
   // Sorting & Filtering States
   const [sortOrder, setSortOrder] = useState<"Newest" | "Oldest">("Newest");
@@ -95,23 +98,39 @@ export default function StudentView() {
     setFilteredNotes([...filtered]);
   };
 
-  const handleAddSessionNote = async () => {
+  const handleAddOrUpdateSessionNote = async () => {
     if (!id) return;
-    await addSessionNote({
-      student_id: id,
-      session_date: sessionDate.toISOString(),
-      subject,
-      topic,
-      lesson_summary: lessonSummary,
-      homework_assigned: homeworkAssigned,
-      engagement_level: engagementLevel,
-      tutor_notes: tutorNotes,
-      parent_feedback: parentFeedback,
-    });
+    if (editingNote) {
+      await updateSessionNote({
+        ...editingNote,
+        session_date: sessionDate.toISOString(),
+        subject,
+        topic,
+        lesson_summary: lessonSummary,
+        homework_assigned: homeworkAssigned,
+        engagement_level: engagementLevel,
+        tutor_notes: tutorNotes,
+        parent_feedback: parentFeedback,
+      });
+      setSnackbarMessage("Session note updated successfully!");
+    } else {
+      await addSessionNote({
+        student_id: id,
+        session_date: sessionDate.toISOString(),
+        subject,
+        topic,
+        lesson_summary: lessonSummary,
+        homework_assigned: homeworkAssigned,
+        engagement_level: engagementLevel,
+        tutor_notes: tutorNotes,
+        parent_feedback: parentFeedback,
+      });
+      setSnackbarMessage("Session note added successfully!");
+    }
     fetchSessionNotes();
     setModalVisible(false);
-    setSnackbarMessage("Session note added successfully!");
     setSnackbarVisible(true);
+    setEditingNote(null);
   };
 
   const handleDeleteSessionNote = async (noteId: string) => {
@@ -119,6 +138,19 @@ export default function StudentView() {
     fetchSessionNotes();
     setSnackbarMessage("Session note deleted successfully!");
     setSnackbarVisible(true);
+  };
+
+  const handleEditSessionNote = (note: SessionNote) => {
+    setEditingNote(note);
+    setSessionDate(new Date(note.session_date));
+    setSubject(note.subject);
+    setTopic(note.topic);
+    setLessonSummary(note.lesson_summary);
+    setHomeworkAssigned(note.homework_assigned);
+    setEngagementLevel(note.engagement_level as any);
+    setTutorNotes(note.tutor_notes);
+    setParentFeedback(note.parent_feedback);
+    setModalVisible(true);
   };
 
   return (
@@ -179,6 +211,7 @@ export default function StudentView() {
                 <Paragraph>Homework: {item.homework_assigned}</Paragraph>
               </Card.Content>
               <Card.Actions>
+                <Button onPress={() => handleEditSessionNote(item)}>Edit</Button>
                 <Button onPress={() => handleDeleteSessionNote(item.id)}>
                   Delete
                 </Button>
@@ -196,14 +229,16 @@ export default function StudentView() {
           Add Session Note
         </Button>
 
-        {/* MODAL FOR ADDING SESSION NOTE */}
+        {/* MODAL FOR ADDING/EDITING SESSION NOTE */}
         <Portal>
           <Modal
             visible={modalVisible}
             onDismiss={() => setModalVisible(false)}
             contentContainerStyle={styles.modalContent}
           >
-            <Title style={styles.modalTitle}>Add Session Note</Title>
+            <Title style={styles.modalTitle}>
+              {editingNote ? "Edit Session Note" : "Add Session Note"}
+            </Title>
 
             {/* DATE PICKER */}
             <DateTimePicker
@@ -266,13 +301,13 @@ export default function StudentView() {
               />
             </View>
 
-            {/* ADD BUTTON */}
+            {/* ADD/UPDATE BUTTON */}
             <Button
               mode="contained"
-              onPress={handleAddSessionNote}
+              onPress={handleAddOrUpdateSessionNote}
               style={styles.modalButton}
             >
-              Add Note
+              {editingNote ? "Update Note" : "Add Note"}
             </Button>
 
             {/* CLOSE MODAL BUTTON */}
