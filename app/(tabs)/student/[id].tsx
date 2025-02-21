@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from "react";
+import { View, FlatList, StyleSheet } from "react-native";
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
+  Appbar,
   TextInput,
-} from "react-native";
+  Button,
+  Card,
+  Modal,
+  Portal,
+  Provider as PaperProvider,
+  Title,
+  Paragraph,
+  Snackbar,
+} from "react-native-paper";
 import RNPickerSelect from "react-native-picker-select";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -15,7 +21,6 @@ import {
 } from "../../../lib/sessionNotes";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import ModalComponent from "react-native-modal";
 
 type SessionNote = {
   id: string;
@@ -35,6 +40,8 @@ export default function StudentView() {
   const [sessionNotes, setSessionNotes] = useState<SessionNote[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [filteredNotes, setFilteredNotes] = useState<SessionNote[]>([]);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
 
   // Sorting & Filtering States
   const [sortOrder, setSortOrder] = useState<"Newest" | "Oldest">("Newest");
@@ -103,195 +110,244 @@ export default function StudentView() {
     });
     fetchSessionNotes();
     setModalVisible(false);
+    setSnackbarMessage("Session note added successfully!");
+    setSnackbarVisible(true);
   };
 
   const handleDeleteSessionNote = async (noteId: string) => {
     await deleteSessionNote(noteId);
     fetchSessionNotes();
+    setSnackbarMessage("Session note deleted successfully!");
+    setSnackbarVisible(true);
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 10 }}>
-        Session Notes
-      </Text>
+    <PaperProvider>
+      <Appbar.Header>
+        <Appbar.BackAction onPress={() => router.back()} />
+        <Appbar.Content title="Session Notes" />
+      </Appbar.Header>
 
-      {/* Sorting Dropdown */}
-      <RNPickerSelect
-        onValueChange={(value: "Newest" | "Oldest") => setSortOrder(value)}
-        items={[
-          { label: "Newest First", value: "Newest" },
-          { label: "Oldest First", value: "Oldest" },
-        ]}
-        value={sortOrder}
-      />
-
-      {/* Filtering by Subject */}
-      <RNPickerSelect
-        onValueChange={(value) => setSelectedSubject(value)}
-        items={[
-          { label: "All Subjects", value: null },
-          { label: "Math", value: "Math" },
-          { label: "Science", value: "Science" },
-          { label: "English", value: "English" },
-        ]}
-        value={selectedSubject}
-      />
-
-      <FlatList
-        data={filteredNotes}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View
-            style={{
-              padding: 15,
-              backgroundColor: "#f2f2f2",
-              marginBottom: 10,
-              borderRadius: 10,
-            }}
-          >
-            <Text style={{ fontSize: 18 }}>{item.subject}</Text>
-            <Text>Topic: {item.topic}</Text>
-            <Text>Date: {format(new Date(item.session_date), "PPPp")}</Text>
-            <Text>Engagement: {item.engagement_level}</Text>
-            <Text>Homework: {item.homework_assigned}</Text>
-            <TouchableOpacity onPress={() => handleDeleteSessionNote(item.id)}>
-              <Text style={{ color: "red", marginTop: 5 }}>Delete</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      />
-
-      {/* ADD SESSION NOTE BUTTON */}
-      <TouchableOpacity
-        onPress={() => setModalVisible(true)}
-        style={{
-          backgroundColor: "blue",
-          padding: 15,
-          borderRadius: 10,
-          marginTop: 10,
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ color: "white", fontWeight: "bold" }}>
-          Add Session Note
-        </Text>
-      </TouchableOpacity>
-
-      {/* MODAL FOR ADDING SESSION NOTE */}
-      <ModalComponent isVisible={modalVisible}>
-        <View
-          style={{ backgroundColor: "white", padding: 20, borderRadius: 10 }}
-        >
-          <Text style={{ fontSize: 18, fontWeight: "bold" }}>
-            Add Session Note
-          </Text>
-
-          {/* DATE PICKER */}
-          <DateTimePicker
-            value={sessionDate}
-            mode="date"
-            display="default"
-            onChange={(event, selectedDate) => {
-              if (selectedDate) setSessionDate(selectedDate);
-            }}
-          />
-
-          {/* SUBJECT INPUT */}
-          <TextInput
-            value={subject}
-            onChangeText={setSubject}
-            placeholder="Subject"
-            style={{
-              borderColor: "#ccc",
-              borderWidth: 1,
-              padding: 8,
-              marginBottom: 5,
-            }}
-          />
-
-          {/* TOPIC INPUT */}
-          <TextInput
-            value={topic}
-            onChangeText={setTopic}
-            placeholder="Topic Covered"
-            style={{
-              borderColor: "#ccc",
-              borderWidth: 1,
-              padding: 8,
-              marginBottom: 5,
-            }}
-          />
-
-          {/* LESSON SUMMARY INPUT */}
-          <TextInput
-            value={lessonSummary}
-            onChangeText={setLessonSummary}
-            placeholder="Lesson Summary"
-            style={{
-              borderColor: "#ccc",
-              borderWidth: 1,
-              padding: 8,
-              marginBottom: 5,
-            }}
-          />
-
-          {/* HOMEWORK INPUT */}
-          <TextInput
-            value={homeworkAssigned}
-            onChangeText={setHomeworkAssigned}
-            placeholder="Homework Assigned"
-            style={{
-              borderColor: "#ccc",
-              borderWidth: 1,
-              padding: 8,
-              marginBottom: 5,
-            }}
-          />
-
-          {/* ENGAGEMENT LEVEL DROPDOWN */}
+      <View style={styles.container}>
+        {/* Sorting Dropdown */}
+        <View style={styles.pickerContainer}>
           <RNPickerSelect
-            onValueChange={(
-              value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted"
-            ) => setEngagementLevel(value)}
+            onValueChange={(value: "Newest" | "Oldest") => setSortOrder(value)}
             items={[
-              { label: "Highly Engaged", value: "Highly Engaged" },
-              { label: "Engaged", value: "Engaged" },
-              { label: "Neutral", value: "Neutral" },
-              { label: "Distracted", value: "Distracted" },
+              { label: "Newest First", value: "Newest" },
+              { label: "Oldest First", value: "Oldest" },
             ]}
-            value={engagementLevel}
+            value={sortOrder}
+            style={pickerSelectStyles}
+            placeholder={{ label: "Sort by...", value: null }}
+            useNativeAndroidPickerStyle={false}
           />
-
-          {/* ADD BUTTON */}
-          <TouchableOpacity
-            onPress={handleAddSessionNote}
-            style={{
-              backgroundColor: "green",
-              padding: 10,
-              marginTop: 10,
-              borderRadius: 5,
-            }}
-          >
-            <Text style={{ color: "white", textAlign: "center" }}>
-              Add Note
-            </Text>
-          </TouchableOpacity>
-
-          {/* CLOSE MODAL BUTTON */}
-          <TouchableOpacity
-            onPress={() => setModalVisible(false)}
-            style={{ marginTop: 10 }}
-          >
-            <Text style={{ color: "red", textAlign: "center" }}>Cancel</Text>
-          </TouchableOpacity>
         </View>
-      </ModalComponent>
 
-      {/* GO BACK BUTTON */}
-      <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20 }}>
-        <Text style={{ color: "blue" }}>Go Back</Text>
-      </TouchableOpacity>
-    </View>
+        {/* Filtering by Subject */}
+        <View style={styles.pickerContainer}>
+          <RNPickerSelect
+            onValueChange={(value) => setSelectedSubject(value)}
+            items={[
+              { label: "All Subjects", value: null },
+              { label: "Math", value: "Math" },
+              { label: "Science", value: "Science" },
+              { label: "English", value: "English" },
+            ]}
+            value={selectedSubject}
+            style={pickerSelectStyles}
+            placeholder={{ label: "Filter by subject...", value: null }}
+            useNativeAndroidPickerStyle={false}
+          />
+        </View>
+
+        {/* Spacing between dropdowns and the first card */}
+        <View style={styles.spacer} />
+
+        <FlatList
+          data={filteredNotes}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title>{item.subject}</Title>
+                <Paragraph>Topic: {item.topic}</Paragraph>
+                <Paragraph>
+                  Date: {format(new Date(item.session_date), "PPPp")}
+                </Paragraph>
+                <Paragraph>Engagement: {item.engagement_level}</Paragraph>
+                <Paragraph>Homework: {item.homework_assigned}</Paragraph>
+              </Card.Content>
+              <Card.Actions>
+                <Button onPress={() => handleDeleteSessionNote(item.id)}>
+                  Delete
+                </Button>
+              </Card.Actions>
+            </Card>
+          )}
+        />
+
+        {/* ADD SESSION NOTE BUTTON */}
+        <Button
+          mode="contained"
+          onPress={() => setModalVisible(true)}
+          style={styles.addButton}
+        >
+          Add Session Note
+        </Button>
+
+        {/* MODAL FOR ADDING SESSION NOTE */}
+        <Portal>
+          <Modal
+            visible={modalVisible}
+            onDismiss={() => setModalVisible(false)}
+            contentContainerStyle={styles.modalContent}
+          >
+            <Title style={styles.modalTitle}>Add Session Note</Title>
+
+            {/* DATE PICKER */}
+            <DateTimePicker
+              value={sessionDate}
+              mode="date"
+              display="default"
+              onChange={(event, selectedDate) => {
+                if (selectedDate) setSessionDate(selectedDate);
+              }}
+            />
+
+            {/* SUBJECT INPUT */}
+            <TextInput
+              label="Subject"
+              value={subject}
+              onChangeText={setSubject}
+              style={styles.input}
+            />
+
+            {/* TOPIC INPUT */}
+            <TextInput
+              label="Topic Covered"
+              value={topic}
+              onChangeText={setTopic}
+              style={styles.input}
+            />
+
+            {/* LESSON SUMMARY INPUT */}
+            <TextInput
+              label="Lesson Summary"
+              value={lessonSummary}
+              onChangeText={setLessonSummary}
+              style={styles.input}
+            />
+
+            {/* HOMEWORK INPUT */}
+            <TextInput
+              label="Homework Assigned"
+              value={homeworkAssigned}
+              onChangeText={setHomeworkAssigned}
+              style={styles.input}
+            />
+
+            {/* ENGAGEMENT LEVEL DROPDOWN */}
+            <View style={styles.pickerContainer}>
+              <RNPickerSelect
+                onValueChange={(
+                  value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted"
+                ) => setEngagementLevel(value)}
+                items={[
+                  { label: "Highly Engaged", value: "Highly Engaged" },
+                  { label: "Engaged", value: "Engaged" },
+                  { label: "Neutral", value: "Neutral" },
+                  { label: "Distracted", value: "Distracted" },
+                ]}
+                value={engagementLevel}
+                style={pickerSelectStyles}
+                placeholder={{ label: "Select engagement level...", value: null }}
+                useNativeAndroidPickerStyle={false}
+              />
+            </View>
+
+            {/* ADD BUTTON */}
+            <Button
+              mode="contained"
+              onPress={handleAddSessionNote}
+              style={styles.modalButton}
+            >
+              Add Note
+            </Button>
+
+            {/* CLOSE MODAL BUTTON */}
+            <Button
+              onPress={() => setModalVisible(false)}
+              style={styles.modalButton}
+            >
+              Cancel
+            </Button>
+          </Modal>
+        </Portal>
+
+        {/* SNACKBAR FOR FEEDBACK */}
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={() => setSnackbarVisible(false)}
+          duration={3000}
+        >
+          {snackbarMessage}
+        </Snackbar>
+      </View>
+    </PaperProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 4,
+    marginBottom: 16,
+    paddingHorizontal: 10,
+    backgroundColor: "white",
+  },
+  spacer: {
+    height: 16,
+  },
+  card: {
+    marginBottom: 16,
+  },
+  addButton: {
+    marginTop: 16,
+  },
+  modalContent: {
+    backgroundColor: "white",
+    padding: 20,
+    margin: 20,
+    borderRadius: 10,
+  },
+  modalTitle: {
+    marginBottom: 16,
+  },
+  input: {
+    marginBottom: 16,
+  },
+  modalButton: {
+    marginTop: 8,
+  },
+});
+
+const pickerSelectStyles = StyleSheet.create({
+  inputIOS: {
+    fontSize: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    color: "black",
+  },
+  inputAndroid: {
+    fontSize: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: "black",
+  },
+});

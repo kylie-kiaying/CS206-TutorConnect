@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Image } from "react-native";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "expo-router";
 import { Provider as PaperProvider, Appbar, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
@@ -18,11 +18,7 @@ export default function LoginScreen() {
     if (error) {
       alert(error.message);
     } else {
-      if (role === "tutor") {
-        router.push("/(tabs)");
-      } else {
-        router.push("/register");
-      }
+      router.push(role === "tutor" ? "/(tabs)" : "/register");
     }
   };
 
@@ -32,12 +28,14 @@ export default function LoginScreen() {
         <Appbar.Content title="Login" />
       </Appbar.Header>
       <View style={styles.container}>
+        <Image source={require('../../assets/images/icon.png')} style={styles.icon} />
         <Text style={styles.title}>Login</Text>
         <PaperTextInput
           style={styles.input}
           label="Email"
           value={email}
           onChangeText={setEmail}
+          mode="outlined"
         />
         <PaperTextInput
           style={styles.input}
@@ -45,6 +43,7 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          mode="outlined"
         />
         <View style={styles.roleContainer}>
           <PaperButton mode="contained" onPress={() => setRole("tutor")}>Tutor</PaperButton>
@@ -62,20 +61,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 20,
-    marginVertical: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  icon: {
+    width: '100%',
+    height: 150,
+    alignSelf: 'center',
+    marginBottom: 20,
+    resizeMode: 'contain',
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
     marginBottom: 30,
     textAlign: "center",
   },
   input: {
     height: 50,
-    borderColor: "#ccc",
-    borderWidth: 1,
     marginBottom: 15,
-    paddingHorizontal: 10,
+    borderRadius: 10,
   },
   roleContainer: {
     flexDirection: "row",
@@ -84,8 +88,5 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     marginBottom: 20,
-  },
-  registerButton: {
-    marginTop: 10,
   },
 });
