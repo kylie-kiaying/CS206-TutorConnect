@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Alert } from "react-native";
-import { FlatList, TouchableOpacity, Modal } from "react-native";
+import { View, Text, StyleSheet, Clipboard, Alert } from "react-native";
+import { FlatList, TouchableOpacity } from "react-native";
 import {
   TextInput,
   Card,
   Button as PaperButton,
   IconButton,
+  Menu,
+  Modal,
 } from "react-native-paper";
 import {
   getStudents,
@@ -31,6 +33,9 @@ export default function HomeScreen() {
   const [newSubject, setNewSubject] = useState("");
   const [nextSessionDate, setNextSessionDate] = useState(new Date());
   const [modalVisible, setModalVisible] = useState(false);
+  const [menuVisible, setMenuVisible] = useState<string | null>(null);
+  const [studentCodePopupVisible, setStudentCodePopupVisible] = useState(false);
+  const [studentCode, setStudentCode] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -65,6 +70,7 @@ export default function HomeScreen() {
   const handleDeleteStudent = async (id: string) => {
     await deleteStudent(id);
     fetchStudents();
+    setMenuVisible(null);
   };
 
   const handleEditStudent = async (id: string) => {
@@ -77,12 +83,18 @@ export default function HomeScreen() {
 
   const handleMoreInfo = async (studentId: string) => {
     const code = await getStudentCode(studentId);
-    console.log("Student Code:", code);
     if (code) {
-      Alert.alert("Student Code", `The student code is: ${code}`);
+      setStudentCode(code);
+      setStudentCodePopupVisible(true);
     } else {
       Alert.alert("Error", "Could not retrieve student code.");
     }
+    setMenuVisible(null);
+  };
+
+  const copyToClipboard = () => {
+    Clipboard.setString(studentCode);
+    Alert.alert("Copied!", "Student code copied to clipboard.");
   };
 
   return (
@@ -95,7 +107,7 @@ export default function HomeScreen() {
         data={students}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <Card style={{ marginBottom: 15, marginHorizontal: 10, padding: 10 }}>
+          <Card style={styles.card}>
             <TouchableOpacity
               onPress={() => router.push(`/student/${item.id}`)}
               style={{ flex: 1 }}
@@ -142,26 +154,37 @@ export default function HomeScreen() {
                           {new Date(item.next_session_date).toLocaleString()}
                         </Text>
                       </View>
-                      <View style={{ flexDirection: "row" }}>
-                        <IconButton
-                          icon="pencil"
-                          size={20}
+
+                      {/* Dropdown Menu for Actions */}
+                      <Menu
+                        visible={menuVisible === item.id}
+                        onDismiss={() => setMenuVisible(null)}
+                        anchor={
+                          <IconButton
+                            icon="dots-vertical"
+                            size={20}
+                            onPress={() => setMenuVisible(item.id)}
+                            style={styles.menuIcon}
+                          />
+                        }
+                      >
+                        <Menu.Item
                           onPress={() => {
                             setEditingStudent(item.id);
                             setNewName(item.name);
+                            setMenuVisible(null);
                           }}
+                          title="Edit"
                         />
-                        <IconButton
-                          icon="trash-can"
-                          size={20}
+                        <Menu.Item
                           onPress={() => handleDeleteStudent(item.id)}
+                          title="Delete"
                         />
-                        <IconButton
-                          icon="information"
-                          size={20}
+                        <Menu.Item
                           onPress={() => handleMoreInfo(item.id)}
+                          title="View Student Code"
                         />
-                      </View>
+                      </Menu>
                     </View>
                   </>
                 )}
@@ -171,11 +194,13 @@ export default function HomeScreen() {
         )}
       />
 
+      {/* Add Student Button */}
       <PaperButton mode="contained" onPress={() => setModalVisible(true)}>
         Add Student
       </PaperButton>
 
-      <Modal visible={modalVisible} animationType="slide">
+      {/* Add Student Modal */}
+      <Modal visible={modalVisible}>
         <View style={{ padding: 20 }}>
           <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>
             Add New Student
@@ -210,6 +235,78 @@ export default function HomeScreen() {
           </PaperButton>
         </View>
       </Modal>
+
+      {/* Student Code Popup */}
+      <Modal
+        visible={studentCodePopupVisible}
+        onDismiss={() => setStudentCodePopupVisible(false)}
+        contentContainerStyle={styles.popupContainer}
+      >
+        {/* Student Code and Copy Icon */}
+        <View style={styles.popupContent}>
+          <Text style={styles.popupTitle}>Student Code</Text>
+          <View style={styles.codeContainer}>
+            <Text style={styles.popupCode}>{studentCode}</Text>
+            <IconButton
+              icon="content-copy"
+              size={24}
+              onPress={copyToClipboard}
+              style={styles.copyIcon}
+            />
+          </View>
+        </View>
+
+        {/* Close Button at Bottom-Right */}
+        <PaperButton
+          mode="text"
+          onPress={() => setStudentCodePopupVisible(false)}
+          style={styles.closeButton}
+        >
+          Close
+        </PaperButton>
+      </Modal>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    marginBottom: 20,
+    marginHorizontal: 10,
+    padding: 15,
+    borderRadius: 8,
+    elevation: 2,
+  },
+  menuIcon: {
+    marginRight: -20,
+  },
+  popupContainer: {
+    backgroundColor: "white",
+    padding: 20,
+    margin: 20,
+    borderRadius: 8,
+  },
+  popupContent: {
+    alignItems: "center",
+  },
+  popupTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  codeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  popupCode: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  copyIcon: {
+    marginLeft: 10,
+  },
+  closeButton: {
+    alignSelf: "flex-end",
+    marginTop: 10,
+  },
+});
