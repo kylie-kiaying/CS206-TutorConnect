@@ -209,6 +209,8 @@ export default function StudentView() {
                 </Paragraph>
                 <Paragraph>Engagement: {item.engagement_level}</Paragraph>
                 <Paragraph>Homework: {item.homework_assigned}</Paragraph>
+                <Paragraph>Tutor Notes: {item.tutor_notes}</Paragraph>
+                <Paragraph>Parent Feedback: {item.parent_feedback}</Paragraph>
               </Card.Content>
               <Card.Actions>
                 <Button onPress={() => handleEditSessionNote(item)}>Edit</Button>
