@@ -50,7 +50,7 @@ export default function LoginScreen() {
           <PaperButton mode="contained" onPress={() => setRole("parent")}>Parent</PaperButton>
         </View>
         <PaperButton mode="contained" onPress={handleLogin} style={styles.loginButton}>Login</PaperButton>
-        <PaperButton mode="outlined" onPress={() => router.push("/register")} style={styles.registerButton}>Register</PaperButton>
+        <PaperButton mode="outlined" onPress={() => router.push("/register")}>Register</PaperButton>
       </View>
     </PaperProvider>
   );
