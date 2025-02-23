@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, Text, StyleSheet, Image, Switch } from "react-native";
 import { supabase } from "../../lib/supabase";
 import { useRouter } from "expo-router";
 import { Provider as PaperProvider, Appbar, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
@@ -18,8 +18,12 @@ export default function LoginScreen() {
     if (error) {
       alert(error.message);
     } else {
-      router.push(role === "tutor" ? "/(tabs)" : "/register");
+      router.push(role === "tutor" ? "/(tabs)" : "/parent/dashboard");
     }
+  };
+
+  const toggleRole = () => {
+    setRole((prevRole) => (prevRole === "tutor" ? "parent" : "tutor"));
   };
 
   return (
@@ -46,8 +50,15 @@ export default function LoginScreen() {
           mode="outlined"
         />
         <View style={styles.roleContainer}>
-          <PaperButton mode="contained" onPress={() => setRole("tutor")}>Tutor</PaperButton>
-          <PaperButton mode="contained" onPress={() => setRole("parent")}>Parent</PaperButton>
+          <Text style={styles.roleLabel}>I'm a Tutor</Text>
+          <Switch
+            value={role === "parent"}
+            onValueChange={toggleRole}
+            trackColor={{ false: "#81b0ff", true: "#81b0ff" }}
+            thumbColor={role === "parent" ? "#f5dd4b" : "#f4f3f4"}
+            style={styles.switch}
+          />
+          <Text style={styles.roleLabel}>Parent</Text>
         </View>
         <PaperButton mode="contained" onPress={handleLogin} style={styles.loginButton}>Login</PaperButton>
         <PaperButton mode="outlined" onPress={() => router.push("/register")}>Register</PaperButton>
@@ -83,8 +94,16 @@ const styles = StyleSheet.create({
   },
   roleContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 30,
+  },
+  roleLabel: {
+    fontSize: 16,
+    marginHorizontal: 10,
+  },
+  switch: {
+    marginHorizontal: 5,
   },
   loginButton: {
     marginBottom: 20,

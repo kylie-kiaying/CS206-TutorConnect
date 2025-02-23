@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, Text, StyleSheet, Image, Switch } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Provider as PaperProvider,
@@ -33,6 +33,10 @@ export default function RegisterScreen() {
     }
   };
 
+  const toggleRole = () => {
+    setRole((prevRole) => (prevRole === "tutor" ? "parent" : "tutor"));
+  };
+
   return (
     <PaperProvider>
       <Appbar.Header>
@@ -60,12 +64,15 @@ export default function RegisterScreen() {
           mode="outlined"
         />
         <View style={styles.roleContainer}>
-          <PaperButton mode="contained" onPress={() => setRole("tutor")}>
-            Tutor
-          </PaperButton>
-          <PaperButton mode="contained" onPress={() => setRole("parent")}>
-            Parent
-          </PaperButton>
+          <Text style={styles.roleLabel}>I'm a Tutor</Text>
+          <Switch
+            value={role === "parent"}
+            onValueChange={toggleRole}
+            trackColor={{ false: "#81b0ff", true: "#81b0ff" }}
+            thumbColor={role === "parent" ? "#f5dd4b" : "#f4f3f4"}
+            style={styles.switch}
+          />
+          <Text style={styles.roleLabel}>I'm a Parent</Text>
         </View>
         {role === "parent" && (
           <PaperTextInput
@@ -112,7 +119,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 20,
+    marginBottom: 30,
     textAlign: "center",
   },
   input: {
@@ -122,10 +129,21 @@ const styles = StyleSheet.create({
   },
   roleContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 30,
   },
+  roleLabel: {
+    fontSize: 16,
+    marginHorizontal: 10,
+  },
+  switch: {
+    marginHorizontal: 20,
+  },
   registerButton: {
+    marginBottom: 20,
+  },
+  backButton: {
     marginBottom: 20,
   },
 });
