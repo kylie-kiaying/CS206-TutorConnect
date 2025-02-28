@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Clipboard, Alert } from "react-native";
+import { View, Text, StyleSheet, Alert } from "react-native";
+import Clipboard from '@react-native-clipboard/clipboard';
 import { FlatList, TouchableOpacity } from "react-native";
 import {
   TextInput,
