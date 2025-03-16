@@ -18,7 +18,7 @@ export default function LoginScreen() {
     if (error) {
       alert(error.message);
     } else {
-      router.push(role === "tutor" ? "/(tabs)" : "/parent/dashboard");
+      router.push(role === "tutor" ? "/" : "/parent/dashboard");
     }
   };
 
