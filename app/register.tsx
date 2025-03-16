@@ -17,20 +17,91 @@ export default function RegisterScreen() {
   const router = useRouter();
 
   const handleRegister = async () => {
-    const { error } = await supabase.auth.signUp({
+    // Register the user with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
     });
-    if (error) {
-      alert(error.message);
-    } else {
-      if (role === "parent" && studentCode.trim() === "") {
+    
+    if (authError) {
+      alert(authError.message);
+      return;
+    }
+    
+    if (!authData.user) {
+      alert("Registration failed. Please try again.");
+      return;
+    }
+    
+    const userId = authData.user.id;
+    
+    // Based on role, create a record in the appropriate table
+    if (role === "tutor") {
+      // Create a record in the tutors table
+      const { error: tutorError } = await supabase
+        .from("tutors")
+        .insert([{ user_id: userId, email }]);
+        
+      if (tutorError) {
+        alert(`Error creating tutor profile: ${tutorError.message}`);
+        return;
+      }
+    } else if (role === "parent") {
+      if (studentCode.trim() === "") {
         alert("Please enter a student code.");
         return;
       }
-      alert("Registration successful!");
-      router.push("/login");
+      
+      // Create a record in the parents table
+      const { error: parentError } = await supabase
+        .from("parents")
+        .insert([{ user_id: userId, email }]);
+        
+      if (parentError) {
+        alert(`Error creating parent profile: ${parentError.message}`);
+        return;
+      }
+      
+      // Find the student by code
+      const { data: codeData, error: codeError } = await supabase
+        .from("student_codes")
+        .select("student_id")
+        .eq("code", studentCode)
+        .single();
+        
+      if (codeError || !codeData) {
+        alert("Invalid student code. Please check and try again.");
+        return;
+      }
+      
+      // Get the parent_id we just created
+      const { data: parentData, error: parentFetchError } = await supabase
+        .from("parents")
+        .select("id")
+        .eq("user_id", userId)
+        .single();
+        
+      if (parentFetchError || !parentData) {
+        alert("Error linking student to parent.");
+        return;
+      }
+      
+      // Create relationship in parent_students table
+      const { error: relationError } = await supabase
+        .from("parent_students")
+        .insert([{ 
+          parent_id: parentData.id, 
+          student_id: codeData.student_id 
+        }]);
+        
+      if (relationError) {
+        alert(`Error linking student to parent: ${relationError.message}`);
+        return;
+      }
     }
+    
+    alert("Registration successful!");
+    router.push("/login");
   };
 
   const toggleRole = () => {

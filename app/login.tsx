@@ -3,22 +3,69 @@ import { View, Text, StyleSheet, Image, Switch } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "expo-router";
 import { Provider as PaperProvider, Appbar, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("tutor"); // Default role
+  const [role, setRole] = useState("tutor"); // Default role for UI display
   const router = useRouter();
 
   const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithPassword({
+    // Sign in with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    if (error) {
-      alert(error.message);
+    
+    if (authError) {
+      alert(authError.message);
+      return;
+    }
+    
+    if (!authData.user) {
+      alert("Login failed. Please check your credentials.");
+      return;
+    }
+    
+    const userId = authData.user.id;
+    
+    if (role === "tutor") {
+      // Check if user exists in tutors table
+      const { data: tutorData, error: tutorError } = await supabase
+        .from("tutors")
+        .select("id")
+        .eq("user_id", userId)
+        .single();
+      
+      if (tutorError) {
+        alert("Could not verify tutor account. Please try again or register as a tutor.");
+        return;
+      }
+      
+      // Store tutor ID in AsyncStorage for use in other parts of the app
+      await AsyncStorage.setItem("tutorId", tutorData.id);
+      
+      // Navigate to tutor dashboard
+      router.push("/tutor/dashboard");
     } else {
-      router.push(role === "tutor" ? "/" : "/parent/dashboard");
+      // Check if user exists in parents table
+      const { data: parentData, error: parentError } = await supabase
+        .from("parents")
+        .select("id")
+        .eq("user_id", userId)
+        .single();
+      
+      if (parentError) {
+        alert("Could not verify parent account. Please try again or register as a parent.");
+        return;
+      }
+      
+      // Store parent ID in AsyncStorage
+      await AsyncStorage.setItem("parentId", parentData.id);
+      
+      // Navigate to parent dashboard
+      router.push("/parent/dashboard");
     }
   };
 

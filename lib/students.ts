@@ -18,6 +18,20 @@ export const getStudents = async (): Promise<Student[]> => {
   return data;
 };
 
+// Fetch students by tutor ID
+export const getStudentsByTutorId = async (tutorId: string): Promise<Student[]> => {
+  const { data, error } = await supabase
+    .from("students")
+    .select("*")
+    .eq("tutor_id", tutorId);
+    
+  if (error) {
+    console.error("Error fetching students for tutor:", error);
+    return [];
+  }
+  return data || [];
+};
+
 // Add a new student
 export async function addStudent(student: Omit<Student, "id">): Promise<Student | null> {
   const { data, error } = await supabase

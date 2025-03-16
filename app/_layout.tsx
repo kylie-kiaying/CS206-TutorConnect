@@ -44,6 +44,12 @@ export default function RootLayout() {
             }}
           />
           <Tabs.Screen
+            name="tutor/dashboard"
+            options={{
+              title: "Tutor Dashboard",
+            }}
+          />
+          <Tabs.Screen
             name="student/[id]"
             options={{
               title: "Student",
