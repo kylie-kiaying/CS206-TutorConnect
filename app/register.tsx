@@ -39,9 +39,6 @@ export default function RegisterScreen() {
 
   return (
     <PaperProvider>
-      <Appbar.Header>
-        <Appbar.Content title="Register" />
-      </Appbar.Header>
       <View style={styles.container}>
         <Image
           source={require("../assets/images/icon.png")}

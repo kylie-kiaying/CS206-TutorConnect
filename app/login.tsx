@@ -28,9 +28,6 @@ export default function LoginScreen() {
 
   return (
     <PaperProvider>
-      <Appbar.Header>
-        <Appbar.Content title="Login" />
-      </Appbar.Header>
       <View style={styles.container}>
         <Image source={require('../assets/images/icon.png')} style={styles.icon} />
         <Text style={styles.title}>Login</Text>
