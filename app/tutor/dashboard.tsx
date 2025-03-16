@@ -356,7 +356,6 @@ const styles = StyleSheet.create({
   addButton: {
     margin: 16,
     borderRadius: 8,
-    backgroundColor: "#0a7ea4",
   },
   modalContainer: {
     backgroundColor: "white",

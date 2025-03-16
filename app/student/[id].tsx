@@ -156,7 +156,7 @@ export default function StudentView() {
   return (
     <PaperProvider>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => router.back()} />
+      <Appbar.BackAction onPress={() => router.push('/tutor/dashboard')} />
         <Appbar.Content title="Session Notes" />
       </Appbar.Header>
 
@@ -356,6 +356,7 @@ const styles = StyleSheet.create({
   },
   addButton: {
     marginTop: 16,
+    borderRadius: 8,
   },
   modalContent: {
     backgroundColor: "white",
@@ -371,6 +372,7 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     marginTop: 8,
+    borderRadius: 8,
   },
 });
 
