@@ -28,7 +28,7 @@ export default function RegisterScreen() {
         alert("Please enter a student code.");
         return;
       }
-      alert("Registration successful! Please check your email to confirm.");
+      alert("Registration successful!");
       router.push("/login");
     }
   };
