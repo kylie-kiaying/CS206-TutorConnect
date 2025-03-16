@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../lib/supabase";
+import storage from '../lib/storage';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -30,7 +31,8 @@ export default function HomeScreen() {
       .single();
     
     if (!tutorError && tutorData) {
-      // User is a tutor, redirect to tutor dashboard
+      // User is a tutor, store ID and redirect to tutor dashboard
+      await storage.setItem("tutorId", tutorData.id);
       router.replace("/tutor/dashboard");
       return;
     }
@@ -43,7 +45,8 @@ export default function HomeScreen() {
       .single();
     
     if (!parentError && parentData) {
-      // User is a parent, redirect to parent dashboard
+      // User is a parent, store ID and redirect to parent dashboard
+      await storage.setItem("parentId", parentData.id);
       router.replace("/parent/dashboard");
       return;
     }

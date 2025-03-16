@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, Switch } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "expo-router";
 import { Provider as PaperProvider, Appbar, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../lib/storage';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -44,7 +44,7 @@ export default function LoginScreen() {
       }
       
       // Store tutor ID in AsyncStorage for use in other parts of the app
-      await AsyncStorage.setItem("tutorId", tutorData.id);
+      await storage.setItem("tutorId", tutorData.id);
       
       // Navigate to tutor dashboard
       router.push("/tutor/dashboard");
@@ -62,7 +62,7 @@ export default function LoginScreen() {
       }
       
       // Store parent ID in AsyncStorage
-      await AsyncStorage.setItem("parentId", parentData.id);
+      await storage.setItem("parentId", parentData.id);
       
       // Navigate to parent dashboard
       router.push("/parent/dashboard");

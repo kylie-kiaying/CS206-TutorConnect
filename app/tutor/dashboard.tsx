@@ -21,7 +21,7 @@ import { useRouter } from "expo-router";
 import { getStudentCode } from "../../lib/studentCodes";
 import { supabase } from "../../lib/supabase";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storage from '../../lib/storage';
 
 type Student = {
   id: string;
@@ -59,10 +59,10 @@ export default function TutorDashboard() {
       return;
     }
     
-    // Try to get tutorId from AsyncStorage first
-    let id = await AsyncStorage.getItem("tutorId");
+    // Try to get tutorId from storage first
+    let id = await storage.getItem("tutorId");
     
-    // If not found in AsyncStorage, get it from the database
+    // If not found in storage, get it from the database
     if (!id) {
       const userId = session.user.id;
       
@@ -83,12 +83,16 @@ export default function TutorDashboard() {
       
       id = tutorData.id;
       // Save it for future use
-      await AsyncStorage.setItem("tutorId", id);
+      await storage.setItem("tutorId", id);
     }
     
     // Set the tutor ID and fetch students
     setTutorId(id);
-    fetchStudents(id);
+    
+    // Fix TypeScript error by ensuring id is not null
+    if (id) {
+      fetchStudents(id);
+    }
   };
 
   const fetchStudents = async (tutorId: string) => {
@@ -155,6 +159,7 @@ export default function TutorDashboard() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    await storage.removeItem("tutorId");
     router.replace("/login");
   };
 
