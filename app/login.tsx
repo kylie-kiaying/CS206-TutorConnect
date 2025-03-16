@@ -1,35 +1,24 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Image, Switch } from "react-native";
+import { supabase } from "../lib/supabase";
 import { useRouter } from "expo-router";
-import {
-  Provider as PaperProvider,
-  Appbar,
-  Button as PaperButton,
-  TextInput as PaperTextInput,
-} from "react-native-paper";
-import { supabase } from "../../lib/supabase";
+import { Provider as PaperProvider, Appbar, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
 
-export default function RegisterScreen() {
+export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("tutor"); // Default role
-  const [studentCode, setStudentCode] = useState(""); // For parents
   const router = useRouter();
 
-  const handleRegister = async () => {
-    const { error } = await supabase.auth.signUp({
+  const handleLogin = async () => {
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     if (error) {
       alert(error.message);
     } else {
-      if (role === "parent" && studentCode.trim() === "") {
-        alert("Please enter a student code.");
-        return;
-      }
-      alert("Registration successful! Please check your email to confirm.");
-      router.push("/login");
+      router.push(role === "tutor" ? "/(tabs)" : "/parent/dashboard");
     }
   };
 
@@ -40,14 +29,11 @@ export default function RegisterScreen() {
   return (
     <PaperProvider>
       <Appbar.Header>
-        <Appbar.Content title="Register" />
+        <Appbar.Content title="Login" />
       </Appbar.Header>
       <View style={styles.container}>
-        <Image
-          source={require("../../assets/images/icon.png")}
-          style={styles.icon}
-        />
-        <Text style={styles.title}>Register</Text>
+        <Image source={require('../assets/images/icon.png')} style={styles.icon} />
+        <Text style={styles.title}>Login</Text>
         <PaperTextInput
           style={styles.input}
           label="Email"
@@ -72,31 +58,10 @@ export default function RegisterScreen() {
             thumbColor={role === "parent" ? "#f5dd4b" : "#f4f3f4"}
             style={styles.switch}
           />
-          <Text style={styles.roleLabel}>I'm a Parent</Text>
+          <Text style={styles.roleLabel}>Parent</Text>
         </View>
-        {role === "parent" && (
-          <PaperTextInput
-            style={styles.input}
-            label="Student Code"
-            value={studentCode}
-            onChangeText={setStudentCode}
-            mode="outlined"
-          />
-        )}
-        <PaperButton
-          mode="contained"
-          onPress={handleRegister}
-          style={styles.registerButton}
-        >
-          Register
-        </PaperButton>
-        <PaperButton
-          mode="outlined"
-          onPress={() => router.push("/login")}
-          style={styles.backButton}
-        >
-          Back to Login
-        </PaperButton>
+        <PaperButton mode="contained" onPress={handleLogin} style={styles.loginButton}>Login</PaperButton>
+        <PaperButton mode="outlined" onPress={() => router.push("/register")}>Register</PaperButton>
       </View>
     </PaperProvider>
   );
@@ -107,14 +72,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 20,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: '#f5f5f5',
   },
   icon: {
-    width: "100%",
+    width: '100%',
     height: 150,
-    alignSelf: "center",
+    alignSelf: 'center',
     marginBottom: 20,
-    resizeMode: "contain",
+    resizeMode: 'contain',
   },
   title: {
     fontSize: 28,
@@ -138,12 +103,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
   switch: {
-    marginHorizontal: 20,
+    marginHorizontal: 5,
   },
-  registerButton: {
-    marginBottom: 20,
-  },
-  backButton: {
+  loginButton: {
     marginBottom: 20,
   },
 });

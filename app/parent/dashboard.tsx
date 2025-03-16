@@ -14,7 +14,7 @@ import {
 import {
   getSessionNotesByCode,
   updateSessionNote,
-} from "../../../lib/sessionNotes";
+} from "../../lib/sessionNotes";
 
 type SessionNote = {
   id: string;

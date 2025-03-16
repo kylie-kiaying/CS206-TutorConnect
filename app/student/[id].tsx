@@ -19,7 +19,7 @@ import {
   addSessionNote,
   deleteSessionNote,
   updateSessionNote,
-} from "../../../lib/sessionNotes";
+} from "../../lib/sessionNotes";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
 

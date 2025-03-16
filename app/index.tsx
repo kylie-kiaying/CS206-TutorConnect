@@ -15,9 +15,9 @@ import {
   addStudent,
   deleteStudent,
   editStudent,
-} from "../../lib/students";
+} from "../lib/students";
 import { useRouter } from "expo-router";
-import { getStudentCode } from "../../lib/studentCodes";
+import { getStudentCode } from "../lib/studentCodes";
 
 type Student = {
   id: string;
