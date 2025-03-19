@@ -3,17 +3,14 @@ import { View, Text, StyleSheet, Image } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Provider as PaperProvider,
-  Appbar,
   Button as PaperButton,
   TextInput as PaperTextInput,
 } from "react-native-paper";
 import { supabase } from "../lib/supabase";
 
-export default function RegisterScreen() {
+export default function TutorRegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("parent");
-  const [studentCode, setStudentCode] = useState(""); // For parents
   const router = useRouter();
 
   const handleRegister = async () => {
@@ -35,69 +32,14 @@ export default function RegisterScreen() {
     
     const userId = authData.user.id;
     
-    // Based on role, create a record in the appropriate table
-    if (role === "tutor") {
-      // Create a record in the tutors table
-      const { error: tutorError } = await supabase
-        .from("tutors")
-        .insert([{ user_id: userId, email }]);
-        
-      if (tutorError) {
-        alert(`Error creating tutor profile: ${tutorError.message}`);
-        return;
-      }
-    } else if (role === "parent") {
-      if (studentCode.trim() === "") {
-        alert("Please enter a student code.");
-        return;
-      }
+    // Create a record in the tutors table
+    const { error: tutorError } = await supabase
+      .from("tutors")
+      .insert([{ user_id: userId, email }]);
       
-      // Create a record in the parents table
-      const { error: parentError } = await supabase
-        .from("parents")
-        .insert([{ user_id: userId, email }]);
-        
-      if (parentError) {
-        alert(`Error creating parent profile: ${parentError.message}`);
-        return;
-      }
-      
-      // Find the student by code
-      const { data: codeData, error: codeError } = await supabase
-        .from("student_codes")
-        .select("student_id")
-        .eq("code", studentCode)
-        .single();
-        
-      if (codeError || !codeData) {
-        alert("Invalid student code. Please check and try again.");
-        return;
-      }
-      
-      // Get the parent_id we just created
-      const { data: parentData, error: parentFetchError } = await supabase
-        .from("parents")
-        .select("id")
-        .eq("user_id", userId)
-        .single();
-        
-      if (parentFetchError || !parentData) {
-        alert("Error linking student to parent.");
-        return;
-      }
-      
-      // Create relationship in parent_students table
-      const { error: relationError } = await supabase
-        .from("parent_students")
-        .insert([{ 
-          parent_id: parentData.id, 
-          student_id: codeData.student_id 
-        }]);
-        
-      if (relationError) {
-        alert(`Error linking student to parent: ${relationError.message}`);
-        return;
-      }
+    if (tutorError) {
+      alert(`Error creating tutor profile: ${tutorError.message}`);
+      return;
     }
     
     alert("Registration successful!");
@@ -111,7 +53,7 @@ export default function RegisterScreen() {
           source={require("../assets/images/icon.png")}
           style={styles.icon}
         />
-        <Text style={styles.title}>Parent Registration</Text>
+        <Text style={styles.title}>Tutor Registration</Text>
         <PaperTextInput
           style={styles.input}
           label="Email"
@@ -125,13 +67,6 @@ export default function RegisterScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          mode="outlined"
-        />
-        <PaperTextInput
-          style={styles.input}
-          label="Student Code"
-          value={studentCode}
-          onChangeText={setStudentCode}
           mode="outlined"
         />
         <PaperButton
@@ -149,14 +84,14 @@ export default function RegisterScreen() {
           Back to Login
         </PaperButton>
         
-        {/* New Tutor link */}
-        <View style={styles.tutorLinkContainer}>
-          <Text style={styles.tutorLinkText}>Are you a tutor? </Text>
+        {/* Parent link */}
+        <View style={styles.parentLinkContainer}>
+          <Text style={styles.parentLinkText}>Are you a parent? </Text>
           <PaperButton 
             mode="text" 
-            onPress={() => router.push("/tutor-register")}
-            style={styles.tutorButton}
-            labelStyle={styles.tutorButtonLabel}
+            onPress={() => router.push("/register")}
+            style={styles.parentButton}
+            labelStyle={styles.parentButtonLabel}
           >
             Register here
           </PaperButton>
@@ -197,21 +132,21 @@ const styles = StyleSheet.create({
   backButton: {
     marginBottom: 20,
   },
-  tutorLinkContainer: {
+  parentLinkContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginTop: 10,
   },
-  tutorLinkText: {
+  parentLinkText: {
     fontSize: 14,
   },
-  tutorButton: {
+  parentButton: {
     marginHorizontal: 0,
     paddingHorizontal: 0,
   },
-  tutorButtonLabel: {
+  parentButtonLabel: {
     fontSize: 14,
     marginHorizontal: 0,
   }
-});
+}); 

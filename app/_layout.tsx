@@ -38,6 +38,18 @@ export default function RootLayout() {
             }}
           />
           <Tabs.Screen
+            name="tutor-login"
+            options={{
+              title: "Tutor Login",
+            }}
+          />
+          <Tabs.Screen
+            name="tutor-register"
+            options={{
+              title: "Tutor Register",
+            }}
+          />
+          <Tabs.Screen
             name="parent/dashboard"
             options={{
               title: "Parent Dashboard",

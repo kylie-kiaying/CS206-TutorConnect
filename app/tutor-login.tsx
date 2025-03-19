@@ -5,10 +5,9 @@ import { useRouter } from "expo-router";
 import { Provider as PaperProvider, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
 import storage from '../lib/storage';
 
-export default function LoginScreen() {
+export default function TutorLoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("parent");
   const router = useRouter();
 
   const handleLogin = async () => {
@@ -30,50 +29,30 @@ export default function LoginScreen() {
     
     const userId = authData.user.id;
     
-    if (role === "tutor") {
-      // Check if user exists in tutors table
-      const { data: tutorData, error: tutorError } = await supabase
-        .from("tutors")
-        .select("id")
-        .eq("user_id", userId)
-        .single();
-      
-      if (tutorError) {
-        alert("Could not verify tutor account. Please try again or register as a tutor.");
-        return;
-      }
-      
-      // Store tutor ID in AsyncStorage for use in other parts of the app
-      await storage.setItem("tutorId", tutorData.id);
-      
-      // Navigate to tutor dashboard
-      router.push("/tutor/dashboard");
-    } else {
-      // Check if user exists in parents table
-      const { data: parentData, error: parentError } = await supabase
-        .from("parents")
-        .select("id")
-        .eq("user_id", userId)
-        .single();
-      
-      if (parentError) {
-        alert("Could not verify parent account. Please try again or register as a parent.");
-        return;
-      }
-      
-      // Store parent ID in AsyncStorage
-      await storage.setItem("parentId", parentData.id);
-      
-      // Navigate to parent dashboard
-      router.push("/parent/dashboard");
+    // Check if user exists in tutors table
+    const { data: tutorData, error: tutorError } = await supabase
+      .from("tutors")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    
+    if (tutorError) {
+      alert("Could not verify tutor account. Please try again or register as a tutor.");
+      return;
     }
+    
+    // Store tutor ID in AsyncStorage for use in other parts of the app
+    await storage.setItem("tutorId", tutorData.id);
+    
+    // Navigate to tutor dashboard
+    router.push("/tutor/dashboard");
   };
 
   return (
     <PaperProvider>
       <View style={styles.container}>
         <Image source={require('../assets/images/icon.png')} style={styles.icon} />
-        <Text style={styles.title}>Parent Login</Text>
+        <Text style={styles.title}>Tutor Login</Text>
         <PaperTextInput
           style={styles.input}
           label="Email"
@@ -92,21 +71,22 @@ export default function LoginScreen() {
         <PaperButton mode="contained" onPress={handleLogin} style={styles.loginButton}>
           Login
         </PaperButton>
-        <PaperButton mode="outlined" onPress={() => router.push("/register")} style={styles.registerButton}>
+        <PaperButton 
+          mode="outlined" 
+          onPress={() => router.push("/tutor-register")} 
+          style={styles.registerButton}
+        >
           Register
         </PaperButton>
         
-        {/* Tutor link */}
-        <View style={styles.tutorLinkContainer}>
-          <Text style={styles.tutorLinkText}>Are you a tutor? </Text>
+        {/* Parent link */}
+        <View style={styles.parentLinkContainer}>
+          <Text style={styles.parentLinkText}>Are you a parent? </Text>
           <PaperButton 
             mode="text" 
-            onPress={() => {
-              setRole("tutor");
-              router.push("/tutor-login");
-            }}
-            style={styles.tutorButton}
-            labelStyle={styles.tutorButtonLabel}
+            onPress={() => router.push("/login")}
+            style={styles.parentButton}
+            labelStyle={styles.parentButtonLabel}
           >
             Login here
           </PaperButton>
@@ -147,21 +127,21 @@ const styles = StyleSheet.create({
   registerButton: {
     marginBottom: 20,
   },
-  tutorLinkContainer: {
+  parentLinkContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginTop: 10,
   },
-  tutorLinkText: {
+  parentLinkText: {
     fontSize: 14,
   },
-  tutorButton: {
+  parentButton: {
     marginHorizontal: 0,
     paddingHorizontal: 0,
   },
-  tutorButtonLabel: {
+  parentButtonLabel: {
     fontSize: 14,
     marginHorizontal: 0,
   }
-});
+}); 
