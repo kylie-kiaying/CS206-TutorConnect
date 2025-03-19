@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.2",
+    "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-clipboard/clipboard": "github:react-native-clipboard/clipboard",
     "@react-native-community/datetimepicker": "^8.3.0",
     "@react-navigation/bottom-tabs": "^7.2.0",
@@ -48,7 +49,8 @@
     "react-native-url-polyfill": "^2.0.0",
     "react-native-vector-icons": "^10.2.0",
     "react-native-web": "^0.19.13",
-    "react-native-webview": "13.12.5"
+    "react-native-webview": "13.12.5",
+    "react-time-picker": "^7.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
