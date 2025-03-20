@@ -13,7 +13,6 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("parent");
-  const [studentCode, setStudentCode] = useState(""); // For parents
   const router = useRouter();
 
   const handleRegister = async () => {
@@ -47,11 +46,6 @@ export default function RegisterScreen() {
         return;
       }
     } else if (role === "parent") {
-      if (studentCode.trim() === "") {
-        alert("Please enter a student code.");
-        return;
-      }
-      
       // Create a record in the parents table
       const { error: parentError } = await supabase
         .from("parents")
@@ -59,43 +53,6 @@ export default function RegisterScreen() {
         
       if (parentError) {
         alert(`Error creating parent profile: ${parentError.message}`);
-        return;
-      }
-      
-      // Find the student by code
-      const { data: codeData, error: codeError } = await supabase
-        .from("student_codes")
-        .select("student_id")
-        .eq("code", studentCode)
-        .single();
-        
-      if (codeError || !codeData) {
-        alert("Invalid student code. Please check and try again.");
-        return;
-      }
-      
-      // Get the parent_id we just created
-      const { data: parentData, error: parentFetchError } = await supabase
-        .from("parents")
-        .select("id")
-        .eq("user_id", userId)
-        .single();
-        
-      if (parentFetchError || !parentData) {
-        alert("Error linking student to parent.");
-        return;
-      }
-      
-      // Create relationship in parent_students table
-      const { error: relationError } = await supabase
-        .from("parent_students")
-        .insert([{ 
-          parent_id: parentData.id, 
-          student_id: codeData.student_id 
-        }]);
-        
-      if (relationError) {
-        alert(`Error linking student to parent: ${relationError.message}`);
         return;
       }
     }
@@ -125,13 +82,6 @@ export default function RegisterScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          mode="outlined"
-        />
-        <PaperTextInput
-          style={styles.input}
-          label="Student Code"
-          value={studentCode}
-          onChangeText={setStudentCode}
           mode="outlined"
         />
         <PaperButton

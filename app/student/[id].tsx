@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, FlatList, StyleSheet } from "react-native";
+import { View, FlatList, StyleSheet, ScrollView, useColorScheme } from "react-native";
 import {
   Appbar,
   TextInput,
@@ -11,6 +11,14 @@ import {
   Title,
   Paragraph,
   Snackbar,
+  ActivityIndicator,
+  Divider,
+  List,
+  Avatar,
+  MD3DarkTheme,
+  MD3LightTheme,
+  useTheme,
+  adaptNavigationTheme,
 } from "react-native-paper";
 import RNPickerSelect from "react-native-picker-select";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,24 +27,55 @@ import {
   addSessionNote,
   deleteSessionNote,
   updateSessionNote,
+  SessionNote,
 } from "../../lib/sessionNotes";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
+import { supabase } from "../../lib/supabase";
 
-type SessionNote = {
+type Class = {
   id: string;
-  student_id: string;
-  session_date: string;
+  name: string;
   subject: string;
-  topic: string;
-  lesson_summary: string;
-  homework_assigned: string;
-  engagement_level: string;
-  tutor_notes: string;
-  parent_feedback: string;
+};
+
+type Topic = {
+  id: string;
+  name: string;
+  class_id: string;
+};
+
+// Custom theme with better dark mode colors
+const customLightTheme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    background: '#f5f5f5',
+    surface: '#ffffff',
+    text: '#000000',
+    primary: '#2196F3',
+    surfaceVariant: '#ffffff',
+    secondaryContainer: '#e3f2fd',
+  }
+};
+
+const customDarkTheme = {
+  ...MD3DarkTheme,
+  colors: {
+    ...MD3DarkTheme.colors,
+    background: '#121212',
+    surface: '#1e1e1e',
+    text: '#ffffff',
+    primary: '#90CAF9',
+    surfaceVariant: '#2c2c2c',
+    secondaryContainer: '#0d47a1',
+  }
 };
 
 export default function StudentView() {
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? customDarkTheme : customLightTheme;
+  
   const { id } = useLocalSearchParams<{ id: string }>(); // Get student ID from URL
   const router = useRouter();
   const [sessionNotes, setSessionNotes] = useState<SessionNote[]>([]);
@@ -52,8 +91,8 @@ export default function StudentView() {
 
   // Form State for New Session Note
   const [sessionDate, setSessionDate] = useState(new Date());
-  const [subject, setSubject] = useState("Math");
-  const [topic, setTopic] = useState("");
+  const [selectedClass, setSelectedClass] = useState<string | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [lessonSummary, setLessonSummary] = useState("");
   const [homeworkAssigned, setHomeworkAssigned] = useState("");
   const [engagementLevel, setEngagementLevel] = useState<
@@ -62,18 +101,127 @@ export default function StudentView() {
   const [tutorNotes, setTutorNotes] = useState("");
   const [parentFeedback, setParentFeedback] = useState("");
 
+  // Available classes and topics
+  const [availableClasses, setAvailableClasses] = useState<Class[]>([]);
+  const [availableTopics, setAvailableTopics] = useState<Topic[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [loadingTopics, setLoadingTopics] = useState(false);
+
   useEffect(() => {
     fetchSessionNotes();
+    fetchAvailableClasses();
   }, []);
 
   useEffect(() => {
     applyFiltersAndSorting();
   }, [sessionNotes, sortOrder, selectedSubject]);
 
+  useEffect(() => {
+    // When a class is selected, fetch topics for that class
+    if (selectedClass) {
+      fetchTopicsForClass(selectedClass);
+    } else {
+      setAvailableTopics([]);
+      setSelectedTopic(null);
+    }
+  }, [selectedClass]);
+
   const fetchSessionNotes = async () => {
     if (id) {
       const data = await getSessionNotes(id);
       setSessionNotes(data);
+      
+      // Fetch all topics referenced in session notes
+      const topicIds = data
+        .filter(note => note.topic_id)
+        .map(note => note.topic_id);
+      
+      if (topicIds.length > 0) {
+        try {
+          const { data: topics, error } = await supabase
+            .from('topics')
+            .select('id, name, class_id')
+            .in('id', topicIds);
+            
+          if (error) throw error;
+          
+          if (topics && topics.length > 0) {
+            setAvailableTopics(prevTopics => {
+              // Combine with any existing topics without duplicates
+              const allTopics = [...prevTopics];
+              topics.forEach(topic => {
+                if (!allTopics.some(t => t.id === topic.id)) {
+                  allTopics.push(topic);
+                }
+              });
+              return allTopics;
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching topics for notes:', error);
+        }
+      }
+    }
+  };
+
+  const fetchAvailableClasses = async () => {
+    setLoadingClasses(true);
+    try {
+      // Define the expected type structure for the join query
+      type ClassStudentRow = {
+        class_id: string;
+        classes: {
+          id: string;
+          name: string;
+          subject: string;
+        } | null;
+      };
+
+      // Fetch classes that this student is enrolled in via class_students
+      const { data: classStudents, error } = await supabase
+        .from('class_students')
+        .select(`
+          class_id,
+          classes:classes(id, name, subject)
+        `)
+        .eq('student_id', id);
+
+      if (error) throw error;
+
+      if (classStudents && classStudents.length > 0) {
+        // Cast the data to the expected type
+        const typedData = classStudents as unknown as ClassStudentRow[];
+        const classes: Class[] = typedData.map(item => ({
+          id: item.class_id,
+          name: item.classes ? item.classes.name : 'Unknown Class',
+          subject: item.classes ? item.classes.subject : 'Unknown Subject'
+        }));
+        setAvailableClasses(classes);
+      }
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+    } finally {
+      setLoadingClasses(false);
+    }
+  };
+
+  const fetchTopicsForClass = async (classId: string) => {
+    setLoadingTopics(true);
+    try {
+      // Fetch topics for the selected class
+      const { data, error } = await supabase
+        .from('topics')
+        .select('id, name, class_id')
+        .eq('class_id', classId)
+        .order('order_index');
+
+      if (error) throw error;
+
+      setAvailableTopics(data || []);
+    } catch (error) {
+      console.error('Error fetching topics:', error);
+    } finally {
+      setLoadingTopics(false);
     }
   };
 
@@ -100,36 +248,56 @@ export default function StudentView() {
 
   const handleAddOrUpdateSessionNote = async () => {
     if (!id) return;
-    if (editingNote) {
-      await updateSessionNote({
-        ...editingNote,
-        session_date: sessionDate.toISOString(),
-        subject,
-        topic,
-        lesson_summary: lessonSummary,
-        homework_assigned: homeworkAssigned,
-        engagement_level: engagementLevel,
-        tutor_notes: tutorNotes,
-        parent_feedback: parentFeedback,
-      });
-      setSnackbarMessage("Session note updated successfully!");
-    } else {
-      await addSessionNote({
-        student_id: id,
-        session_date: sessionDate.toISOString(),
-        subject,
-        topic,
-        lesson_summary: lessonSummary,
-        homework_assigned: homeworkAssigned,
-        engagement_level: engagementLevel,
-        tutor_notes: tutorNotes,
-        parent_feedback: parentFeedback,
-      });
-      setSnackbarMessage("Session note added successfully!");
+    
+    try {
+      if (editingNote) {
+        await updateSessionNote({
+          ...editingNote,
+          session_date: sessionDate.toISOString(),
+          class_id: selectedClass,
+          topic_id: selectedTopic,
+          lesson_summary: lessonSummary,
+          homework_assigned: homeworkAssigned,
+          engagement_level: engagementLevel,
+          tutor_notes: tutorNotes,
+          parent_feedback: parentFeedback,
+        });
+        setSnackbarMessage("Session note updated successfully!");
+      } else {
+        await addSessionNote({
+          student_id: id,
+          session_date: sessionDate.toISOString(),
+          class_id: selectedClass,
+          topic_id: selectedTopic,
+          lesson_summary: lessonSummary,
+          homework_assigned: homeworkAssigned,
+          engagement_level: engagementLevel,
+          tutor_notes: tutorNotes,
+          parent_feedback: parentFeedback,
+        });
+        setSnackbarMessage("Session note added successfully!");
+      }
+      
+      await fetchSessionNotes();
+      resetForm();
+      setModalVisible(false);
+      setSnackbarVisible(true);
+    } catch (error) {
+      console.error("Error saving session note:", error);
+      setSnackbarMessage("Error saving session note. Please try again.");
+      setSnackbarVisible(true);
     }
-    fetchSessionNotes();
-    setModalVisible(false);
-    setSnackbarVisible(true);
+  };
+
+  const resetForm = () => {
+    setSessionDate(new Date());
+    setSelectedClass(null);
+    setSelectedTopic(null);
+    setLessonSummary("");
+    setHomeworkAssigned("");
+    setEngagementLevel("Engaged");
+    setTutorNotes("");
+    setParentFeedback("");
     setEditingNote(null);
   };
 
@@ -143,20 +311,25 @@ export default function StudentView() {
   const handleEditSessionNote = (note: SessionNote) => {
     setEditingNote(note);
     setSessionDate(new Date(note.session_date));
-    setSubject(note.subject);
-    setTopic(note.topic);
-    setLessonSummary(note.lesson_summary);
-    setHomeworkAssigned(note.homework_assigned);
-    setEngagementLevel(note.engagement_level as any);
-    setTutorNotes(note.tutor_notes);
-    setParentFeedback(note.parent_feedback);
+    setSelectedClass(note.class_id || null);
+    setSelectedTopic(note.topic_id || null);
+    setLessonSummary(note.lesson_summary || "");
+    setHomeworkAssigned(note.homework_assigned || "");
+    setEngagementLevel(note.engagement_level as any || "Engaged");
+    setTutorNotes(note.tutor_notes || "");
+    setParentFeedback(note.parent_feedback || "");
     setModalVisible(true);
+  };
+
+  // Format class name with subject
+  const formatClassName = (classItem: Class) => {
+    return `${classItem.name} (${classItem.subject})`;
   };
 
   return (
     <PaperProvider>
       <Appbar.Header>
-      <Appbar.BackAction onPress={() => router.push('/tutor/dashboard')} />
+        <Appbar.BackAction onPress={() => router.push('/tutor/dashboard')} />
         <Appbar.Content title="Session Notes" />
       </Appbar.Header>
 
@@ -202,8 +375,18 @@ export default function StudentView() {
           renderItem={({ item }) => (
             <Card style={styles.card}>
               <Card.Content>
-                <Title>{item.subject}</Title>
-                <Paragraph>Topic: {item.topic}</Paragraph>
+                <Title>
+                  {item.class_id ? 
+                    availableClasses.find(c => c.id === item.class_id)?.name || 'Unknown Class' : 
+                    item.subject || 'Unknown Subject'}
+                </Title>
+                <Paragraph>
+                  Topic: {
+                    item.topic_id ? 
+                    availableTopics.find(t => t.id === item.topic_id)?.name : 
+                    item.topic || 'N/A'
+                  }
+                </Paragraph>
                 <Paragraph>
                   Date: {format(new Date(item.session_date), "PPPp")}
                 </Paragraph>
@@ -225,7 +408,10 @@ export default function StudentView() {
         {/* ADD SESSION NOTE BUTTON */}
         <Button
           mode="contained"
-          onPress={() => setModalVisible(true)}
+          onPress={() => {
+            resetForm();
+            setModalVisible(true);
+          }}
           style={styles.addButton}
         >
           Add Session Note
@@ -235,90 +421,145 @@ export default function StudentView() {
         <Portal>
           <Modal
             visible={modalVisible}
-            onDismiss={() => setModalVisible(false)}
+            onDismiss={() => {
+              setModalVisible(false);
+              resetForm();
+            }}
             contentContainerStyle={styles.modalContent}
           >
-            <Title style={styles.modalTitle}>
-              {editingNote ? "Edit Session Note" : "Add Session Note"}
-            </Title>
+            <ScrollView>
+              <Title style={styles.modalTitle}>
+                {editingNote ? "Edit Session Note" : "Add Session Note"}
+              </Title>
 
-            {/* DATE PICKER */}
-            <DateTimePicker
-              value={sessionDate}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                if (selectedDate) setSessionDate(selectedDate);
-              }}
-            />
+              {/* CLASS SELECTION */}
+              <View style={styles.formField}>
+                <Title style={styles.fieldLabel}>Class</Title>
+                {loadingClasses ? (
+                  <ActivityIndicator size="small" />
+                ) : (
+                  <RNPickerSelect
+                    onValueChange={(value) => setSelectedClass(value)}
+                    items={availableClasses.map(c => ({
+                      label: formatClassName(c),
+                      value: c.id
+                    }))}
+                    value={selectedClass}
+                    style={pickerSelectStyles}
+                    placeholder={{ label: "Select a class...", value: null }}
+                    useNativeAndroidPickerStyle={false}
+                  />
+                )}
+              </View>
 
-            {/* SUBJECT INPUT */}
-            <TextInput
-              label="Subject"
-              value={subject}
-              onChangeText={setSubject}
-              style={styles.input}
-            />
+              {/* TOPIC SELECTION (Optional) */}
+              {selectedClass && (
+                <View style={styles.formField}>
+                  <Title style={styles.fieldLabel}>Topic (Optional)</Title>
+                  {loadingTopics ? (
+                    <ActivityIndicator size="small" />
+                  ) : availableTopics.length > 0 ? (
+                    <RNPickerSelect
+                      onValueChange={(value) => setSelectedTopic(value)}
+                      items={availableTopics.map(t => ({
+                        label: t.name,
+                        value: t.id
+                      }))}
+                      value={selectedTopic}
+                      style={pickerSelectStyles}
+                      placeholder={{ label: "Select a topic...", value: null }}
+                      useNativeAndroidPickerStyle={false}
+                    />
+                  ) : (
+                    <Paragraph style={styles.noTopicsText}>
+                      No topics available for this class
+                    </Paragraph>
+                  )}
+                </View>
+              )}
 
-            {/* TOPIC INPUT */}
-            <TextInput
-              label="Topic Covered"
-              value={topic}
-              onChangeText={setTopic}
-              style={styles.input}
-            />
+              <Divider style={styles.divider} />
 
-            {/* LESSON SUMMARY INPUT */}
-            <TextInput
-              label="Lesson Summary"
-              value={lessonSummary}
-              onChangeText={setLessonSummary}
-              style={styles.input}
-            />
+              {/* DATE PICKER */}
+              <View style={styles.formField}>
+                <Title style={styles.fieldLabel}>Session Date</Title>
+                <DateTimePicker
+                  value={sessionDate}
+                  mode="date"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    if (selectedDate) setSessionDate(selectedDate);
+                  }}
+                />
+              </View>
 
-            {/* HOMEWORK INPUT */}
-            <TextInput
-              label="Homework Assigned"
-              value={homeworkAssigned}
-              onChangeText={setHomeworkAssigned}
-              style={styles.input}
-            />
-
-            {/* ENGAGEMENT LEVEL DROPDOWN */}
-            <View style={styles.pickerContainer}>
-              <RNPickerSelect
-                onValueChange={(
-                  value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted"
-                ) => setEngagementLevel(value)}
-                items={[
-                  { label: "Highly Engaged", value: "Highly Engaged" },
-                  { label: "Engaged", value: "Engaged" },
-                  { label: "Neutral", value: "Neutral" },
-                  { label: "Distracted", value: "Distracted" },
-                ]}
-                value={engagementLevel}
-                style={pickerSelectStyles}
-                placeholder={{ label: "Select engagement level...", value: null }}
-                useNativeAndroidPickerStyle={false}
+              {/* LESSON SUMMARY INPUT */}
+              <TextInput
+                label="Lesson Summary"
+                value={lessonSummary}
+                onChangeText={setLessonSummary}
+                style={styles.input}
+                multiline
               />
-            </View>
 
-            {/* ADD/UPDATE BUTTON */}
-            <Button
-              mode="contained"
-              onPress={handleAddOrUpdateSessionNote}
-              style={styles.modalButton}
-            >
-              {editingNote ? "Update Note" : "Add Note"}
-            </Button>
+              {/* HOMEWORK INPUT */}
+              <TextInput
+                label="Homework Assigned"
+                value={homeworkAssigned}
+                onChangeText={setHomeworkAssigned}
+                style={styles.input}
+              />
 
-            {/* CLOSE MODAL BUTTON */}
-            <Button
-              onPress={() => setModalVisible(false)}
-              style={styles.modalButton}
-            >
-              Cancel
-            </Button>
+              {/* ENGAGEMENT LEVEL DROPDOWN */}
+              <View style={styles.pickerContainer}>
+                <Title style={styles.fieldLabel}>Engagement Level</Title>
+                <RNPickerSelect
+                  onValueChange={(
+                    value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted"
+                  ) => setEngagementLevel(value)}
+                  items={[
+                    { label: "Highly Engaged", value: "Highly Engaged" },
+                    { label: "Engaged", value: "Engaged" },
+                    { label: "Neutral", value: "Neutral" },
+                    { label: "Distracted", value: "Distracted" },
+                  ]}
+                  value={engagementLevel}
+                  style={pickerSelectStyles}
+                  placeholder={{ label: "Select engagement level...", value: null }}
+                  useNativeAndroidPickerStyle={false}
+                />
+              </View>
+
+              {/* TUTOR NOTES */}
+              <TextInput
+                label="Tutor Notes"
+                value={tutorNotes}
+                onChangeText={setTutorNotes}
+                style={styles.input}
+                multiline
+              />
+
+              {/* ADD/UPDATE BUTTON */}
+              <Button
+                mode="contained"
+                onPress={handleAddOrUpdateSessionNote}
+                style={styles.modalButton}
+                disabled={!selectedClass}
+              >
+                {editingNote ? "Update Note" : "Add Note"}
+              </Button>
+
+              {/* CLOSE MODAL BUTTON */}
+              <Button
+                onPress={() => {
+                  setModalVisible(false);
+                  resetForm();
+                }}
+                style={styles.modalButton}
+              >
+                Cancel
+              </Button>
+            </ScrollView>
           </Modal>
         </Portal>
 
@@ -340,39 +581,57 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 4,
-    marginBottom: 16,
-    paddingHorizontal: 10,
-    backgroundColor: "white",
-  },
-  spacer: {
-    height: 16,
-  },
   card: {
     marginBottom: 16,
   },
   addButton: {
-    marginTop: 16,
-    borderRadius: 8,
+    position: "absolute",
+    bottom: 16,
+    right: 16,
+    borderRadius: 28,
   },
   modalContent: {
     backgroundColor: "white",
     padding: 20,
     margin: 20,
-    borderRadius: 10,
+    borderRadius: 8,
+    maxHeight: "80%",
   },
   modalTitle: {
+    fontSize: 20,
     marginBottom: 16,
+    textAlign: "center",
   },
   input: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   modalButton: {
     marginTop: 8,
-    borderRadius: 8,
+  },
+  pickerContainer: {
+    marginBottom: 16,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 4,
+    padding: 8,
+  },
+  spacer: {
+    height: 16,
+  },
+  formField: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  divider: {
+    marginVertical: 16,
+  },
+  noTopicsText: {
+    fontStyle: "italic",
+    color: "#666",
+    padding: 8,
   },
 });
 
@@ -381,12 +640,51 @@ const pickerSelectStyles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: 12,
     paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 4,
     color: "black",
+    paddingRight: 30,
+    backgroundColor: "white",
   },
   inputAndroid: {
     fontSize: 16,
     paddingHorizontal: 10,
     paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
     color: "black",
+    paddingRight: 30,
+    backgroundColor: "white",
+  },
+});
+
+// Dynamic picker styles based on theme
+const getPickerSelectStyles = (theme: any) => StyleSheet.create({
+  inputIOS: {
+    fontSize: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.outline,
+    borderRadius: 4,
+    color: theme.colors.text,
+    paddingRight: 30,
+    backgroundColor: theme.colors.surface,
+  },
+  inputAndroid: {
+    fontSize: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.outline,
+    borderRadius: 8,
+    color: theme.colors.text,
+    paddingRight: 30,
+    backgroundColor: theme.colors.surface,
+  },
+  placeholder: {
+    color: theme.colors.text + '88',
   },
 });

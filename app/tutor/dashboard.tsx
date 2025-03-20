@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Alert, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Alert, ScrollView, useColorScheme } from "react-native";
 import Clipboard from "@react-native-clipboard/clipboard";
 import { FlatList, TouchableOpacity } from "react-native";
 import {
@@ -12,6 +12,9 @@ import {
   Appbar,
   Divider,
   SegmentedButtons,
+  Provider as PaperProvider,
+  MD3DarkTheme,
+  MD3LightTheme,
 } from "react-native-paper";
 import {
   getStudentsByTutorId,
@@ -33,12 +36,65 @@ import { supabase } from "../../lib/supabase";
 import TimePicker from "react-time-picker";
 import storage from "../../lib/storage";
 
-type StudentWithSessions = Student & {
-  sessions: Session[];
+// Custom theme with better dark mode colors
+const customLightTheme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    background: '#f5f5f5',
+    surface: '#ffffff',
+    text: '#000000',
+    primary: '#2196F3',
+    surfaceVariant: '#ffffff',
+    secondaryContainer: '#e3f2fd',
+  }
+};
+
+const customDarkTheme = {
+  ...MD3DarkTheme,
+  colors: {
+    ...MD3DarkTheme.colors,
+    background: '#121212',
+    surface: '#1e1e1e',
+    text: '#ffffff',
+    primary: '#90CAF9',
+    surfaceVariant: '#2c2c2c',
+    secondaryContainer: '#0d47a1',
+  }
+};
+
+interface Class {
+  id: string;
+  name: string;
+  subject: string;
+  description: string | null;
+  curriculum_id: string | null;
+  student_count?: number;
+  class_students: { count: number }[];
+}
+
+interface StudentClass {
+  class_id: string;
+  class: {
+    id: string;
+    name: string;
+    subject: string;
+  }
+}
+
+type StudentWithClasses = Student & {
+  classes: StudentClass[];
 };
 
 export default function TutorDashboard() {
-  const [students, setStudents] = useState<StudentWithSessions[]>([]);
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? customDarkTheme : customLightTheme;
+  
+  const router = useRouter();
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [students, setStudents] = useState<StudentWithClasses[]>([]);
   const [editingStudent, setEditingStudent] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -49,9 +105,6 @@ export default function TutorDashboard() {
   const [sessionModalVisible, setSessionModalVisible] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [editStudentModalVisible, setEditStudentModalVisible] = useState(false);
-  const router = useRouter();
-
-  // New session state
   const [newSubjects, setNewSubjects] = useState<
     { subject: string; day: number; time: string }[]
   >([]);
@@ -61,8 +114,6 @@ export default function TutorDashboard() {
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [addSessionTimePickerVisible, setAddSessionTimePickerVisible] = useState(false);
   const [addStudentTimePickerVisible, setAddStudentTimePickerVisible] = useState(false);
-
-  // Edit session states
   const [editSessionModalVisible, setEditSessionModalVisible] = useState(false);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [editSessionSubject, setEditSessionSubject] = useState("");
@@ -70,10 +121,21 @@ export default function TutorDashboard() {
   const [editSessionTime, setEditSessionTime] = useState("15:00");
   const [editSessionTimePickerVisible, setEditSessionTimePickerVisible] =
     useState(false);
+  const [activeTab, setActiveTab] = useState('classes'); // 'classes' or 'students'
+  const [createClassModalVisible, setCreateClassModalVisible] = useState(false);
+  const [newClassName, setNewClassName] = useState("");
+  const [newClassSubject, setNewClassSubject] = useState("");
+  const [newClassDescription, setNewClassDescription] = useState("");
 
   useEffect(() => {
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchClasses();
+    }
+  }, [user]);
 
   const checkAuth = async () => {
     // Check if user is authenticated
@@ -83,9 +145,11 @@ export default function TutorDashboard() {
 
     if (!session) {
       // Redirect to login if not authenticated
-      router.replace("/login");
+      router.replace("/tutor-login");
       return;
     }
+
+    setUser(session.user);
 
     // Try to get tutorId from storage first
     let id = await storage.getItem("tutorId");
@@ -105,7 +169,7 @@ export default function TutorDashboard() {
         // If not a tutor, redirect to login
         Alert.alert("Error", "Could not verify tutor account.");
         await supabase.auth.signOut();
-        router.replace("/login");
+        router.replace("/tutor-login");
         return;
       }
 
@@ -123,24 +187,84 @@ export default function TutorDashboard() {
     }
   };
 
+  const fetchClasses = async () => {
+    try {
+      if (!user) return;
+
+      // Fetch classes with student count
+      const { data, error } = await supabase
+        .from('classes')
+        .select('*, class_students(count)')
+        .eq('tutor_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setClasses(data || []);
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchStudents = async (tutorId: string) => {
     if (!tutorId) return;
 
-    // Get all students for this tutor
-    const studentsData = await getStudentsByTutorId(tutorId);
+    try {
+      // Get all students for this tutor
+      const studentsData = await getStudentsByTutorId(tutorId);
 
-    // For each student, get their sessions
-    const studentsWithSessions: StudentWithSessions[] = await Promise.all(
-      studentsData.map(async (student) => {
-        const sessions = await getSessionsByStudentId(student.id);
-        return {
-          ...student,
-          sessions,
-        };
-      })
-    );
+      // For each student, get the classes they're enrolled in
+      const studentsWithClasses: StudentWithClasses[] = await Promise.all(
+        studentsData.map(async (student) => {
+          // Get classes for this student from class_students table
+          const { data: classData, error } = await supabase
+            .from("class_students")
+            .select(`
+              class_id, 
+              classes:classes(id, name, subject)
+            `)
+            .eq("student_id", student.id);
 
-    setStudents(studentsWithSessions);
+          if (error) {
+            console.error("Error fetching classes for student:", error);
+            return { ...student, classes: [] };
+          }
+
+          // Log the raw data to debug
+          console.log(`Raw class data for student ${student.name}:`, classData);
+
+          // Transform the data to match the StudentClass interface
+          const classes = (classData || []).map(item => {
+            // Extract class data, checking if it's an array (which it might be in Supabase's response)
+            const classInfo = Array.isArray(item.classes) 
+              ? item.classes[0] // If it's an array, take the first item
+              : item.classes;   // Otherwise use it directly
+
+            return {
+              class_id: item.class_id,
+              class: {
+                id: classInfo?.id || "",
+                name: classInfo?.name || "",
+                subject: classInfo?.subject || ""
+              }
+            };
+          });
+
+          console.log(`Processed classes for student ${student.name}:`, classes);
+
+          return {
+            ...student,
+            classes,
+          };
+        })
+      );
+
+      setStudents(studentsWithClasses);
+    } catch (error) {
+      console.error("Error fetching students with classes:", error);
+      Alert.alert("Error", "Failed to load students");
+    }
   };
 
   const handleAddStudent = async () => {
@@ -149,28 +273,31 @@ export default function TutorDashboard() {
       return;
     }
 
-    if (newName.trim() && newSubjects.length > 0) {
-      await addStudent(
-        {
-          tutor_id: tutorId,
-          name: newName,
-        },
-        newSubjects.map((subject) => ({
-          subject: subject.subject,
-          day_of_week: subject.day,
-          time: subject.time,
-        }))
-      );
+    if (newName.trim()) {
+      try {
+        // Insert the student
+        const { data, error } = await supabase
+          .from("students")
+          .insert([
+            {
+              tutor_id: tutorId,
+              name: newName.trim(),
+            },
+          ])
+          .select();
 
-      fetchStudents(tutorId);
-      setModalVisible(false);
-      setNewName("");
-      setNewSubjects([]);
+        if (error) throw error;
+
+        // Refresh students list
+        fetchStudents(tutorId);
+        setModalVisible(false);
+        setNewName("");
+      } catch (error) {
+        console.error("Error adding student:", error);
+        Alert.alert("Error", "Failed to add student");
+      }
     } else {
-      Alert.alert(
-        "Error",
-        "Please provide a name and at least one subject with schedule."
-      );
+      Alert.alert("Error", "Please provide a name for the student.");
     }
   };
 
@@ -207,7 +334,7 @@ export default function TutorDashboard() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     await storage.removeItem("tutorId");
-    router.replace("/login");
+    router.replace("/tutor-login");
   };
 
   const handleAddSubject = () => {
@@ -307,7 +434,7 @@ export default function TutorDashboard() {
     setEditSessionModalVisible(true);
   };
 
-  const openEditStudentModal = (student: StudentWithSessions) => {
+  const openEditStudentModal = (student: StudentWithClasses) => {
     setEditingStudent(student.id);
     setNewName(student.name);
     setEditStudentModalVisible(true);
@@ -343,62 +470,172 @@ export default function TutorDashboard() {
     setEditingStudent(null);
   };
 
-  return (
-    <View style={styles.container}>
-      <Appbar.Header>
-        <Appbar.Content title="My Students" />
-        <Appbar.Action icon="logout" onPress={handleLogout} />
-      </Appbar.Header>
+  const handleCreateClass = async () => {
+    if (!newClassName.trim() || !newClassSubject.trim()) {
+      Alert.alert("Error", "Class name and subject are required");
+      return;
+    }
 
+    try {
+      // Insert the new class into the database
+      const { data, error } = await supabase
+        .from("classes")
+        .insert([
+          {
+            name: newClassName.trim(),
+            subject: newClassSubject.trim(),
+            description: newClassDescription.trim() || null,
+            tutor_id: user.id,
+          },
+        ])
+        .select();
+
+      if (error) throw error;
+
+      // Refresh the classes list
+      fetchClasses();
+      
+      // Close the modal and reset form
+      setCreateClassModalVisible(false);
+      resetClassForm();
+      
+      // Navigate to the newly created class
+      if (data && data[0]) {
+        router.push({
+          pathname: '/tutor/classes/[id]' as any,
+          params: { id: data[0].id }
+        });
+      }
+    } catch (error) {
+      console.error("Error creating class:", error);
+      Alert.alert("Error", "Failed to create class");
+    }
+  };
+
+  const resetClassForm = () => {
+    setNewClassName("");
+    setNewClassSubject("");
+    setNewClassDescription("");
+  };
+
+  if (loading) {
+    return (
+      <PaperProvider theme={theme}>
+        <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+          <Text style={{ color: theme.colors.text }}>Loading...</Text>
+        </View>
+      </PaperProvider>
+    );
+  }
+
+  const renderClassesTab = () => (
+    <>
+      <ScrollView style={styles.list}>
+        {classes.length === 0 ? (
+          <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
+            <Card.Content>
+              <Text style={[styles.emptyText, { color: theme.colors.text }]}>
+                You haven't created any classes yet.
+              </Text>
+              <Text style={[styles.emptySubtext, { color: theme.colors.text + 'aa' }]}>
+                Create a class to start managing your students and curriculum.
+              </Text>
+            </Card.Content>
+          </Card>
+        ) : (
+          classes.map((classItem) => (
+            <Card
+              key={classItem.id}
+              style={[styles.card, { backgroundColor: theme.colors.surface }]}
+              onPress={() => router.push({
+                pathname: '/tutor/classes/[id]' as any,
+                params: { id: classItem.id }
+              })}
+            >
+              <Card.Content>
+                <Text style={[styles.className, { color: theme.colors.text }]}>
+                  {classItem.name}
+                </Text>
+                <Text style={[styles.subject, { color: theme.colors.primary }]}>
+                  {classItem.subject}
+                </Text>
+                {classItem.description && (
+                  <Text style={[styles.descriptionText, { color: theme.colors.text + 'cc' }]}>
+                    {classItem.description}
+                  </Text>
+                )}
+                <Text style={[styles.studentCountText, { backgroundColor: theme.colors.secondaryContainer }]}>
+                  {classItem.class_students[0]?.count || 0} student{(classItem.class_students[0]?.count || 0) === 1 ? '' : 's'}
+                </Text>
+              </Card.Content>
+            </Card>
+          ))
+        )}
+      </ScrollView>
+
+      <PaperButton
+        mode="contained"
+        onPress={() => setCreateClassModalVisible(true)}
+        style={styles.floatingAddButton}
+      >
+        Create Class
+      </PaperButton>
+    </>
+  );
+
+  const renderStudentsTab = () => (
+    <>
       <FlatList
         style={styles.list}
         data={students}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <Card style={styles.card}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               {editingStudent === item.id ? (
                 <TextInput
                   value={newName}
                   onChangeText={setNewName}
                   style={styles.editInput}
+                  theme={theme}
                 />
               ) : (
                 <View style={styles.cardHeader}>
-                  <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.totalSubjects}>
-                    {item.sessions.length}{" "}
-                    {item.sessions.length === 1 ? "Subject" : "Subjects"}
+                  <Text style={[styles.name, { color: theme.colors.text }]}>{item.name}</Text>
+                  <Text style={[styles.totalSubjects, { backgroundColor: theme.colors.secondaryContainer }]}>
+                    {item.classes.length}{" "}
+                    {item.classes.length === 1 ? "Class" : "Classes"}
                   </Text>
                 </View>
               )}
 
-              {item.sessions.length > 0 ? (
-                <View style={styles.sessionsContainer}>
-                  <Text style={styles.sessionHeader}>Scheduled Sessions:</Text>
-                  {item.sessions.map((session) => (
+              {item.classes.length > 0 ? (
+                <View style={styles.classesContainer}>
+                  <Text style={[styles.classHeader, { color: theme.colors.text + 'cc' }]}>Enrolled Classes:</Text>
+                  {item.classes.map((studentClass) => (
                     <TouchableOpacity
-                      key={session.id}
-                      style={styles.sessionItem}
-                      onPress={() => openEditSessionModal(session)}
+                      key={studentClass.class_id}
+                      style={[styles.classItem, { backgroundColor: theme.colors.surfaceVariant }]}
+                      onPress={() => 
+                        router.push({
+                          pathname: '/tutor/classes/[id]' as any,
+                          params: { id: studentClass.class_id }
+                        })
+                      }
                     >
-                      <View style={styles.sessionInfo}>
-                        <Text style={styles.subject}>{session.subject}</Text>
-                        <Text style={styles.scheduleText}>
-                          {getDayName(session.day_of_week)}s at{" "}
-                          {formatTime(session.time)}
-                        </Text>
-                        <Text style={styles.nextSession}>
-                          Next: {getNextSessionDateString(session)}
+                      <View style={styles.classInfo}>
+                        <Text style={[styles.subject, { color: theme.colors.primary }]}>{studentClass.class.name}</Text>
+                        <Text style={[styles.classSubject, { color: theme.colors.text + 'cc' }]}>
+                          Subject: {studentClass.class.subject}
                         </Text>
                       </View>
                     </TouchableOpacity>
                   ))}
                 </View>
               ) : (
-                <View style={styles.noSessionsContainer}>
-                  <Text style={styles.noSessionsText}>
-                    No sessions scheduled
+                <View style={styles.noClassesContainer}>
+                  <Text style={[styles.noClassesText, { color: theme.colors.text + '88' }]}>
+                    Not enrolled in any classes
                   </Text>
                 </View>
               )}
@@ -433,15 +670,6 @@ export default function TutorDashboard() {
                       leadingIcon="pencil"
                     />
                     <Menu.Item
-                      onPress={() => {
-                        setSelectedStudent(item.id);
-                        setSessionModalVisible(true);
-                        setMenuVisible(null);
-                      }}
-                      title="Add Subject"
-                      leadingIcon="plus"
-                    />
-                    <Menu.Item
                       onPress={() => handleDeleteStudent(item.id)}
                       title="Delete Student"
                       leadingIcon="delete"
@@ -458,495 +686,253 @@ export default function TutorDashboard() {
           </Card>
         )}
       />
+    </>
+  );
 
-      {/* Add New Student Modal */}
-      <Modal
-        visible={modalVisible}
-        onDismiss={closeAddStudentModal}
-        contentContainerStyle={styles.modalContainer}
-      >
-        <ScrollView>
-          <Text style={styles.modalTitle}>Add New Student</Text>
+  return (
+    <PaperProvider theme={theme}>
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Appbar.Header>
+          <Appbar.Content title="Dashboard" />
+          <Appbar.Action icon="logout" onPress={handleLogout} />
+        </Appbar.Header>
+
+        <View style={[styles.tabContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
+          <SegmentedButtons
+            value={activeTab}
+            onValueChange={setActiveTab}
+            buttons={[
+              { value: 'classes', label: 'Classes' },
+              { value: 'students', label: 'Students' },
+            ]}
+            style={styles.tabs}
+          />
+        </View>
+
+        {activeTab === 'classes' ? renderClassesTab() : renderStudentsTab()}
+
+        {/* Add New Student Modal */}
+        <Modal
+          visible={modalVisible}
+          onDismiss={() => {
+            setModalVisible(false);
+            setNewName("");
+          }}
+          contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Add New Student</Text>
           <TextInput
+            style={styles.input}
             label="Name"
             value={newName}
             onChangeText={setNewName}
-            style={styles.input}
+            theme={theme}
+            mode="outlined"
           />
-
-          <Divider style={styles.divider} />
-          <Text style={styles.sectionTitle}>Add Subjects & Schedule</Text>
-
-          <View style={styles.subjectInputContainer}>
-            <TextInput
-              label="Subject"
-              value={newSubject}
-              onChangeText={setNewSubject}
-              style={styles.subjectInput}
-            />
-
-            <View style={styles.scheduleContainer}>
-              <Text style={styles.scheduleLabel}>Day:</Text>
-              <SegmentedButtons
-                value={selectedDay.toString()}
-                onValueChange={(value) => setSelectedDay(parseInt(value))}
-                buttons={[
-                  { value: "1", label: "Mon" },
-                  { value: "2", label: "Tue" },
-                  { value: "3", label: "Wed" },
-                  { value: "4", label: "Thu" },
-                ]}
-                style={styles.dayPicker}
-              />
-              <SegmentedButtons
-                value={selectedDay.toString()}
-                onValueChange={(value) => setSelectedDay(parseInt(value))}
-                buttons={[
-                  { value: "5", label: "Fri" },
-                  { value: "6", label: "Sat" },
-                  { value: "0", label: "Sun" },
-                ]}
-                style={styles.dayPicker}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={styles.timePickerButton}
-              onPress={() => setAddStudentTimePickerVisible(true)}
-            >
-              <Text>Time: {formatTime(selectedTime)}</Text>
-            </TouchableOpacity>
-
-            {addStudentTimePickerVisible && (
-              <View style={styles.timePickerContainer}>
-                <TimePicker
-                  onChange={(value) => {
-                    setSelectedTime(value || "00:00");
-                    setAddStudentTimePickerVisible(false);
-                  }}
-                  value={selectedTime}
-                  disableClock={true}
-                />
-              </View>
-            )}
-
-            <PaperButton
-              mode="contained"
-              onPress={handleAddSubject}
-              style={styles.addSubjectButton}
-            >
-              Add Subject
-            </PaperButton>
-          </View>
-
-          {newSubjects.length > 0 && (
-            <View style={styles.subjectListContainer}>
-              <Text style={styles.subjectListTitle}>Added Subjects:</Text>
-              {newSubjects.map((subject, index) => (
-                <View key={index} style={styles.subjectListItem}>
-                  <View style={styles.subjectDetails}>
-                    <Text style={styles.subjectName}>{subject.subject}</Text>
-                    <Text style={styles.subjectSchedule}>
-                      {getDayName(subject.day)}s at {formatTime(subject.time)}
-                    </Text>
-                  </View>
-                  <IconButton
-                    icon="delete"
-                    size={20}
-                    onPress={() => handleRemoveSubject(index)}
-                  />
-                </View>
-              ))}
-            </View>
-          )}
-
-          <View style={styles.buttonContainer}>
-            <PaperButton
-              onPress={closeAddStudentModal}
-            >
-              Cancel
-            </PaperButton>
-            <PaperButton
+          <View style={styles.modalButtons}>
+            <PaperButton onPress={() => setModalVisible(false)}>Cancel</PaperButton>
+            <PaperButton 
+              mode="contained" 
               onPress={handleAddStudent}
-              mode="contained"
-              disabled={newName.trim() === "" || newSubjects.length === 0}
+              disabled={!newName.trim()}
             >
-              Add Student
+              Add
             </PaperButton>
           </View>
-        </ScrollView>
-      </Modal>
+        </Modal>
 
-      {/* Add Session Modal */}
-      <Modal
-        visible={sessionModalVisible}
-        onDismiss={() => {
-          setSessionModalVisible(false);
-          // If adding from edit student modal, reopen it
-          if (editingStudent && selectedStudent === editingStudent) {
-            setEditStudentModalVisible(true);
-          }
-        }}
-        contentContainerStyle={styles.modalContainer}
-      >
-        <Text style={styles.modalTitle}>Add New Subject</Text>
-        <TextInput
-          label="Subject"
-          value={newSubject}
-          onChangeText={setNewSubject}
-          style={styles.input}
-        />
-
-        <View style={styles.scheduleContainer}>
-          <Text style={styles.scheduleLabel}>Day:</Text>
-          <SegmentedButtons
-            value={selectedDay.toString()}
-            onValueChange={(value) => setSelectedDay(parseInt(value))}
-            buttons={[
-              { value: "1", label: "Mon" },
-              { value: "2", label: "Tue" },
-              { value: "3", label: "Wed" },
-              { value: "4", label: "Thu" },
-            ]}
-            style={styles.dayPicker}
-          />
-          <SegmentedButtons
-            value={selectedDay.toString()}
-            onValueChange={(value) => setSelectedDay(parseInt(value))}
-            buttons={[
-              { value: "5", label: "Fri" },
-              { value: "6", label: "Sat" },
-              { value: "0", label: "Sun" },
-            ]}
-            style={styles.dayPicker}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={styles.timePickerButton}
-          onPress={() => setAddSessionTimePickerVisible(true)}
+        {/* Edit Student Modal */}
+        <Modal
+          visible={editStudentModalVisible}
+          onDismiss={closeEditStudentModal}
+          contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}
         >
-          <Text>Time: {formatTime(selectedTime)}</Text>
-        </TouchableOpacity>
-
-        {addSessionTimePickerVisible && (
-          <View style={styles.timePickerContainer}>
-            <TimePicker
-              onChange={(value) => {
-                setSelectedTime(value || "00:00");
-                setAddSessionTimePickerVisible(false);
-              }}
-              value={selectedTime}
-              disableClock={true}
-            />
-          </View>
-        )}
-
-        <View style={styles.buttonContainer}>
-          <PaperButton onPress={() => {
-            setSessionModalVisible(false);
-            // If adding from edit student modal, reopen it
-            if (editingStudent && selectedStudent === editingStudent) {
-              setEditStudentModalVisible(true);
-            }
-          }}>
-            Cancel
-          </PaperButton>
-          <PaperButton 
-            onPress={() => {
-              handleAddSessionForStudent();
-              // If adding from edit student modal, reopen it
-              if (editingStudent && selectedStudent === editingStudent) {
-                setTimeout(() => {
-                  setEditStudentModalVisible(true);
-                }, 300); //
-              }
-            }} 
-            mode="contained"
-          >
-            Add
-          </PaperButton>
-        </View>
-      </Modal>
-
-      {/* Edit Session Modal */}
-      <Modal
-        visible={editSessionModalVisible}
-        onDismiss={() => {
-          setEditSessionModalVisible(false);
-          if (editingStudent) {
-            setEditStudentModalVisible(true);
-          }
-        }}
-        contentContainerStyle={styles.modalContainer}
-      >
-        <Text style={styles.modalTitle}>Edit Subject</Text>
-        <TextInput
-          label="Subject"
-          value={editSessionSubject}
-          onChangeText={setEditSessionSubject}
-          style={styles.input}
-        />
-
-        <View style={styles.scheduleContainer}>
-          <Text style={styles.scheduleLabel}>Day:</Text>
-          <SegmentedButtons
-            value={editSessionDay.toString()}
-            onValueChange={(value) => setEditSessionDay(parseInt(value))}
-            buttons={[
-              { value: "1", label: "Mon" },
-              { value: "2", label: "Tue" },
-              { value: "3", label: "Wed" },
-              { value: "4", label: "Thu" },
-            ]}
-            style={styles.dayPicker}
+          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Edit Student</Text>
+          <TextInput
+            style={styles.input}
+            label="Name"
+            value={newName}
+            onChangeText={setNewName}
+            theme={theme}
+            mode="outlined"
           />
-          <SegmentedButtons
-            value={editSessionDay.toString()}
-            onValueChange={(value) => setEditSessionDay(parseInt(value))}
-            buttons={[
-              { value: "5", label: "Fri" },
-              { value: "6", label: "Sat" },
-              { value: "0", label: "Sun" },
-            ]}
-            style={styles.dayPicker}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={styles.timePickerButton}
-          onPress={() => setEditSessionTimePickerVisible(true)}
-        >
-          <Text>Time: {formatTime(editSessionTime)}</Text>
-        </TouchableOpacity>
-
-        {editSessionTimePickerVisible && (
-          <View style={styles.timePickerContainer}>
-            <TimePicker
-              onChange={(value) => {
-                setEditSessionTime(value || "00:00");
-                setEditSessionTimePickerVisible(false);
-              }}
-              value={editSessionTime}
-              disableClock={true}
-            />
-          </View>
-        )}
-
-        <View style={styles.buttonContainer}>
-          <PaperButton 
-            onPress={() => {
-              if (editingSession) handleDeleteSession(editingSession.id);
-              // Check if we were editing from the edit student modal and reopen it
-              if (editingStudent) {
-                setTimeout(() => {
-                  setEditStudentModalVisible(true);
-                }, 300);
-              }
-            }}
-            style={styles.deleteButton}
-          >
-            Delete
-          </PaperButton>
-          <View style={styles.rightButtons}>
+          <View style={styles.modalButtons}>
+            <PaperButton onPress={closeEditStudentModal}>Cancel</PaperButton>
             <PaperButton 
+              mode="contained" 
               onPress={() => {
-                setEditSessionModalVisible(false);
-                // Check if we were editing from the edit student modal and reopen it
-                if (editingStudent) {
-                  setEditStudentModalVisible(true);
-                }
+                if (editingStudent) handleEditStudent(editingStudent);
               }}
-            >
-              Cancel
-            </PaperButton>
-            <PaperButton 
-              onPress={() => {
-                handleEditSession();
-                if (editingStudent) {
-                  setTimeout(() => {
-                    setEditStudentModalVisible(true);
-                  }, 300);
-                }
-              }} 
-              mode="contained"
+              disabled={!newName.trim()}
             >
               Save
             </PaperButton>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* Edit Student Modal */}
-      <Modal
-        visible={editStudentModalVisible}
-        onDismiss={closeEditStudentModal}
-        contentContainerStyle={styles.modalContainer}
-      >
-        <ScrollView>
-          <Text style={styles.modalTitle}>Edit Student</Text>
-          <TextInput
-            label="Name"
-            value={newName}
-            onChangeText={setNewName}
-            style={styles.input}
-          />
-
-          <Divider style={styles.divider} />
-          <Text style={styles.sectionTitle}>Subject Schedule</Text>
-
-          {editingStudent &&
-            students
-              .find((s) => s.id === editingStudent)
-              ?.sessions.map((session) => (
-                <TouchableOpacity
-                  key={session.id}
-                  style={styles.editSessionItem}
-                  onPress={() => openEditSessionModal(session)}
-                >
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.subject}>{session.subject}</Text>
-                    <Text style={styles.scheduleText}>
-                      {getDayName(session.day_of_week)}s at{" "}
-                      {formatTime(session.time)}
-                    </Text>
-                  </View>
-                  <IconButton
-                    icon="pencil"
-                    size={20}
-                    onPress={() => openEditSessionModal(session)}
-                  />
-                </TouchableOpacity>
-              ))}
-
-          <PaperButton
-            mode="outlined"
-            onPress={() => {
-              if (editingStudent) {
-                setSelectedStudent(editingStudent);
-                setSessionModalVisible(true);
-                setEditStudentModalVisible(false);
-              }
-            }}
-            style={styles.addSubjectButtonInEdit}
-            icon="plus"
-          >
-            Add Subject
-          </PaperButton>
-
-          <View style={styles.buttonContainer}>
-            <PaperButton onPress={closeEditStudentModal}>
-              Cancel
-            </PaperButton>
+        {/* Student Code Modal */}
+        <Modal
+          visible={studentCodePopupVisible}
+          onDismiss={() => setStudentCodePopupVisible(false)}
+          contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Student Code</Text>
+          <Text style={[styles.codeText, { color: theme.colors.primary }]}>{studentCode}</Text>
+          <View style={styles.modalButtons}>
             <PaperButton
               onPress={() => {
-                if (editingStudent) {
-                  handleEditStudent(editingStudent);
-                  setEditStudentModalVisible(false);
-                }
+                Clipboard.setString(studentCode);
+                Alert.alert("Copied!", "Student code copied to clipboard");
               }}
-              mode="contained"
             >
-              Save Changes
+              Copy
+            </PaperButton>
+            <PaperButton
+              mode="contained"
+              onPress={() => setStudentCodePopupVisible(false)}
+            >
+              Close
             </PaperButton>
           </View>
-        </ScrollView>
-      </Modal>
+        </Modal>
 
-      <Modal
-        visible={studentCodePopupVisible}
-        onDismiss={() => setStudentCodePopupVisible(false)}
-        contentContainerStyle={styles.modalContainer}
-      >
-        <Text style={styles.modalTitle}>Student Code</Text>
-        <Text style={styles.codeText}>{studentCode}</Text>
-        <Text style={styles.codeInstructions}>
-          Give this code to the student's parents to link the student to their
-          account.
-        </Text>
-        <View style={styles.buttonContainer}>
-          <PaperButton onPress={() => setStudentCodePopupVisible(false)}>
-            Close
-          </PaperButton>
-          <PaperButton onPress={handleCopyCode} mode="contained">
-            Copy Code
-          </PaperButton>
-        </View>
-      </Modal>
-
-      <PaperButton
-        mode="contained"
-        onPress={() => {
-          setNewName("");
-          setNewSubjects([]);
-          setSelectedTime("15:00");
-          setSelectedDay(1);
-          setModalVisible(true);
-        }}
-        style={styles.addButton}
-      >
-        Add Student
-      </PaperButton>
-    </View>
+        {/* Create Class Modal */}
+        <Modal
+          visible={createClassModalVisible}
+          onDismiss={() => {
+            setCreateClassModalVisible(false);
+            resetClassForm();
+          }}
+          contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Create New Class</Text>
+          <TextInput
+            style={styles.input}
+            label="Class Name"
+            value={newClassName}
+            onChangeText={setNewClassName}
+            theme={theme}
+            mode="outlined"
+          />
+          <TextInput
+            style={styles.input}
+            label="Subject"
+            value={newClassSubject}
+            onChangeText={setNewClassSubject}
+            theme={theme}
+            mode="outlined"
+          />
+          <TextInput
+            style={styles.input}
+            label="Description (Optional)"
+            value={newClassDescription}
+            onChangeText={setNewClassDescription}
+            multiline
+            numberOfLines={3}
+            theme={theme}
+            mode="outlined"
+          />
+          <View style={styles.modalButtons}>
+            <PaperButton 
+              onPress={() => {
+                setCreateClassModalVisible(false);
+                resetClassForm();
+              }}
+            >
+              Cancel
+            </PaperButton>
+            <PaperButton 
+              mode="contained" 
+              onPress={handleCreateClass}
+              disabled={!newClassName.trim() || !newClassSubject.trim()}
+            >
+              Create
+            </PaperButton>
+          </View>
+        </Modal>
+      </View>
+    </PaperProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#f5f5f5",
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 16,
   },
   list: {
+    flex: 1,
     padding: 16,
   },
   card: {
     marginBottom: 16,
-    elevation: 3,
-    borderRadius: 12,
-    overflow: "hidden",
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    marginBottom: 8,
   },
   name: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 12,
-    color: "#263238",
+  },
+  totalSubjects: {
+    fontSize: 14,
+    color: "#666",
+    backgroundColor: "#e1f5fe",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  classesContainer: {
+    marginTop: 8,
+  },
+  classHeader: {
+    fontSize: 14,
+    fontWeight: "bold",
+    marginBottom: 8,
+    color: "#666",
+  },
+  classItem: {
+    marginBottom: 8,
+    backgroundColor: "#f0f4f8",
+    borderRadius: 8,
+    padding: 12,
+  },
+  classInfo: {
+    flexDirection: "column",
   },
   subject: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#1e88e5",
+    fontSize: 16,
+    fontWeight: "500",
   },
-  nextSession: {
-    fontSize: 13,
-    marginTop: 3,
-    color: "#546e7a",
+  classSubject: {
+    fontSize: 14,
+    color: "#555",
+    marginTop: 4,
+  },
+  noClassesContainer: {
+    padding: 16,
+    alignItems: "center",
+  },
+  noClassesText: {
+    color: "#888",
+    fontStyle: "italic",
   },
   editInput: {
-    backgroundColor: "#f0f0f0",
-    marginBottom: 10,
-    borderRadius: 8,
-  },
-  addButton: {
-    margin: 16,
-    borderRadius: 12,
-    paddingVertical: 6,
-    elevation: 2,
+    marginBottom: 16,
   },
   modalContainer: {
     backgroundColor: "white",
     padding: 20,
     margin: 20,
     borderRadius: 8,
-    maxHeight: "80%",
   },
   modalTitle: {
     fontSize: 20,
@@ -957,176 +943,64 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: 16,
   },
-  buttonContainer: {
+  modalButtons: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 16,
+    justifyContent: "flex-end",
+    gap: 8,
   },
   codeText: {
     fontSize: 24,
+    textAlign: "center",
+    marginVertical: 20,
     fontWeight: "bold",
-    textAlign: "center",
-    marginVertical: 16,
-    padding: 12,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
+    color: "#1976d2",
   },
-  codeInstructions: {
-    textAlign: "center",
-    marginBottom: 16,
-    color: "#666",
+  floatingAddButton: {
+    position: "absolute",
+    bottom: 16,
+    right: 16,
+    borderRadius: 28,
   },
-  datePickerButton: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 4,
-    marginBottom: 16,
+  emptyCard: {
+    margin: 16,
+    padding: 8,
   },
-  divider: {
-    marginVertical: 16,
-  },
-  sectionTitle: {
+  emptyText: {
     fontSize: 16,
     fontWeight: "bold",
-    marginBottom: 12,
-  },
-  subjectInputContainer: {
-    marginBottom: 16,
-  },
-  subjectInput: {
+    textAlign: "center",
     marginBottom: 8,
   },
-  scheduleContainer: {
-    marginBottom: 8,
-  },
-  scheduleLabel: {
+  emptySubtext: {
     fontSize: 14,
-    marginBottom: 4,
-  },
-  dayPicker: {
-    marginBottom: 8,
-  },
-  timePickerButton: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 4,
-    marginBottom: 12,
-  },
-  addSubjectButton: {
-    marginTop: 8,
-  },
-  subjectListContainer: {
-    marginTop: 16,
-    marginBottom: 8,
-    backgroundColor: "#f9f9f9",
-    padding: 12,
-    borderRadius: 8,
-  },
-  subjectListTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  subjectListItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-    padding: 8,
-    backgroundColor: "#fff",
-    borderRadius: 4,
-    elevation: 1,
-  },
-  subjectDetails: {
-    flex: 1,
-  },
-  subjectName: {
-    fontWeight: "500",
-  },
-  subjectSchedule: {
-    fontSize: 12,
+    textAlign: "center",
     color: "#666",
   },
-  sessionsContainer: {
-    marginTop: 12,
-    backgroundColor: "#f5f7fa",
-    borderRadius: 10,
-    padding: 10,
-  },
-  sessionHeader: {
-    fontSize: 15,
-    fontWeight: "600",
-    marginBottom: 10,
-    color: "#455a64",
-    paddingHorizontal: 6,
-  },
-  sessionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-    padding: 12,
-    backgroundColor: "white",
-    borderRadius: 8,
-    elevation: 1,
-    borderLeftWidth: 3,
-    borderLeftColor: "#42a5f5",
-  },
-  sessionInfo: {
-    flex: 1,
-  },
-  scheduleText: {
-    fontSize: 14,
-    color: "#546e7a",
-    marginTop: 3,
-  },
-  noSessionsContainer: {
-    marginTop: 12,
-    alignItems: "center",
+  tabContainer: {
     padding: 16,
-    backgroundColor: "#f5f7fa",
-    borderRadius: 10,
+    paddingBottom: 8,
   },
-  noSessionsText: {
+  tabs: {
     marginBottom: 8,
-    color: "#78909c",
-    fontStyle: "italic",
   },
-  deleteButton: {
-    backgroundColor: "#ffebee",
+  className: {
+    fontSize: 18,
+    fontWeight: "bold",
   },
-  rightButtons: {
-    flexDirection: "row",
+  descriptionText: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 4,
+    marginBottom: 8,
   },
-  editSessionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-    marginTop: 8,
-    padding: 12,
-    backgroundColor: "white",
-    borderRadius: 8,
-    elevation: 1,
-    borderLeftWidth: 3,
-    borderLeftColor: "#42a5f5",
-  },
-  addSubjectButtonInEdit: {
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  totalSubjects: {
+  studentCountText: {
     fontSize: 14,
     color: "#607d8b",
     backgroundColor: "#e1f5fe",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
-  },
-  timePickerContainer: {
-    marginTop: 10,
-    alignItems: "center",
+    alignSelf: "flex-start",
+    marginTop: 8,
   },
 });
