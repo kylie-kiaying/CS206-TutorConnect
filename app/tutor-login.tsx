@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabase";
 import { useRouter } from "expo-router";
 import { Provider as PaperProvider, Button as PaperButton, TextInput as PaperTextInput } from 'react-native-paper';
 import storage from '../lib/storage';
+import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 
 export default function TutorLoginScreen() {
   const [email, setEmail] = useState("");
@@ -41,8 +43,36 @@ export default function TutorLoginScreen() {
       return;
     }
     
+    // Get Expo push token
+    let pushToken = null;
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+    }
+
+    if (finalStatus === 'granted') {
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        pushToken = tokenData.data;
+
+        // For android devices
+        if (Platform.OS === 'android') {
+            await Notifications.setNotificationChannelAsync('default', {
+                name: 'default',
+                importance: Notifications.AndroidImportance.MAX,
+            });
+        }
+    }
+
     // Store tutor ID in AsyncStorage for use in other parts of the app
     await storage.setItem("tutorId", tutorData.id);
+
+    // Save push token to tutor table
+    if (pushToken) {
+        await supabase.from("tutors").update({ push_token: pushToken }).eq("id", tutorData.id);
+    }
     
     // Navigate to tutor dashboard
     router.push("/tutor/dashboard");

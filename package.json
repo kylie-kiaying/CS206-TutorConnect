@@ -54,7 +54,8 @@
     "react-native-web": "^0.19.13",
     "react-native-webview": "13.12.5",
     "react-time-picker": "^7.0.0",
-    "react-native-svg": "^14.1.0"
+    "react-native-svg": "^14.1.0",
+    "expo-notifications": "~0.29.14"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
