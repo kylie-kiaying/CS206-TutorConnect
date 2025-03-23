@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "477754120502",
+    "project_id": "tutortrack-ef2b4",
+    "storage_bucket": "tutortrack-ef2b4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:477754120502:android:b127409ace61472715fb97",
+        "android_client_info": {
+          "package_name": "com.anonymous.tutortrack"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBm4h2AaKIa6GcdX-4gbC8qP87xVJRnO2M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

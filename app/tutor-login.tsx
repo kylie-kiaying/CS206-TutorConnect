@@ -6,6 +6,32 @@ import { Provider as PaperProvider, Button as PaperButton, TextInput as PaperTex
 import storage from '../lib/storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import * as Device from 'expo-device';
+import { push } from "expo-router/build/global-state/routing";
+
+async function registerForPushNotificationsAsync(userId: string) {
+    // 🚫 Skip for non-device platforms (web or simulator)
+    if (!Device.isDevice || Platform.OS === 'web') {
+      console.log("Push notifications only work on physical mobile devices.");
+      return null;
+    }
+  
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+  
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+  
+    if (finalStatus !== 'granted') {
+      console.log("Permission not granted for notifications.");
+      return null;
+    }
+  
+    const tokenData = await Notifications.getExpoPushTokenAsync();
+    return tokenData.data;
+}   
 
 export default function TutorLoginScreen() {
   const [email, setEmail] = useState("");
@@ -43,37 +69,37 @@ export default function TutorLoginScreen() {
       return;
     }
     
-    // Get Expo push token
-    let pushToken = null;
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-    }
-
-    if (finalStatus === 'granted') {
-        const tokenData = await Notifications.getExpoPushTokenAsync();
-        pushToken = tokenData.data;
-
-        // For android devices
-        if (Platform.OS === 'android') {
-            await Notifications.setNotificationChannelAsync('default', {
-                name: 'default',
-                importance: Notifications.AndroidImportance.MAX,
-            });
-        }
-    }
-
+    console.log("tutor account verified");
     // Store tutor ID in AsyncStorage for use in other parts of the app
     await storage.setItem("tutorId", tutorData.id);
 
+    console.log("push token registration");
     // Save push token to tutor table
-    if (pushToken) {
-        await supabase.from("tutors").update({ push_token: pushToken }).eq("id", tutorData.id);
+    try {
+        const pushToken = await registerForPushNotificationsAsync(userId);
+        console.log("push token registered:", pushToken);
+
+        if (pushToken) {
+            console.log("attempting to update tutors table with push token");
+            const { data: updateData, error: updateError } = await supabase
+                .from("tutors")
+                .update({ push_token: pushToken })
+                .eq("user_id", userId)
+                .select();
+                
+            if (updateError) {
+                console.error("Error updating push token:", updateError);
+            } else {
+                console.log("push token update successful:", updateData);
+            }
+        } else {
+            console.log("no push token received, skipping update");
+        }
+    } catch (error) {
+        console.error("Error in push notification process:", error);
     }
-    
+
+    console.log("push token process completed");
     // Navigate to tutor dashboard
     router.push("/tutor/dashboard");
   };

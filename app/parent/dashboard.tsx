@@ -30,6 +30,7 @@ import storage from "../../lib/storage";
 import { format } from "date-fns";
 import { useRouter } from "expo-router";
 import { LineChart, BarChart } from "react-native-chart-kit";
+import NotificationsBell from '../../components/NotificationsBell';
 
 // Custom theme with better dark mode colors
 const customLightTheme = {
@@ -363,11 +364,16 @@ export default function ParentScreen() {
           ...currentNote,
           parent_feedback: parentFeedback,
           student_id: currentNote.student_id,
-          engagement_level: currentNote.engagement_level as
-            | "Highly Engaged"
-            | "Engaged"
-            | "Neutral"
-            | "Distracted",
+          session_date: currentNote.session_date,
+          subject: currentNote.subject,
+          topic: currentNote.topic,
+          lesson_summary: currentNote.lesson_summary,
+          homework_assigned: currentNote.homework_assigned,
+          engagement_level: currentNote.engagement_level,
+          understanding_level: currentNote.understanding_level,
+          tutor_notes: currentNote.tutor_notes,
+          class_id: currentNote.class_id,
+          topic_id: currentNote.topic_id
         });
         
         setFeedbackModalVisible(false);
@@ -595,6 +601,7 @@ export default function ParentScreen() {
       <Appbar.Header>
         <Appbar.Content title="Parent Dashboard" />
         <Appbar.Action icon="logout" onPress={() => router.push('/login')} />
+        <NotificationsBell />
       </Appbar.Header>
       
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
