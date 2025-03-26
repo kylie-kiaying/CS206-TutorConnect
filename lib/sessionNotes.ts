@@ -4,8 +4,10 @@ export type SessionNote = {
   id: string;
   student_id: string;
   session_date: string;
-  subject: string;
-  topic: string;
+  subject?: string;
+  topic?: string;
+  class_id?: string | null;
+  topic_id?: string | null;
   lesson_summary: string;
   homework_assigned: string;
   engagement_level: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted";
