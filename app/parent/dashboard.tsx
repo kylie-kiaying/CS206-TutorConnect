@@ -72,6 +72,7 @@ type SessionNote = {
   parent_feedback: string;
   class_id?: string;
   topic_id?: string;
+  assignment_completion?: number;
 };
 
 type Student = {
@@ -133,6 +134,10 @@ export default function ParentScreen() {
 
   // Add this to your state declarations
   const [availableClasses, setAvailableClasses] = useState<Array<{id: string, name: string, subject: string}>>([]);
+
+  // Add these state declarations
+  const [selectedNote, setSelectedNote] = useState<SessionNote | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
 
   // Create theme-dependent styles inside the component
   const themedStyles = {
@@ -590,6 +595,12 @@ export default function ParentScreen() {
     );
   };
 
+  // Add this function
+  const handleViewNoteDetails = (note: SessionNote) => {
+    setSelectedNote(note);
+    setDetailModalVisible(true);
+  };
+
   return (
     <PaperProvider theme={theme}>
       <Appbar.Header>
@@ -678,14 +689,22 @@ export default function ParentScreen() {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
                     renderItem={({ item }) => (
-                      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+                      <Card 
+                        style={[styles.card, { backgroundColor: theme.colors.surface }]}
+                        onPress={() => handleViewNoteDetails(item)}
+                      >
                         <Card.Content>
-                          <Title style={{ color: theme.colors.text }}>{item.subject}</Title>
+                          <Title style={{ color: theme.colors.text }}>
+                            {item.class_id ? 
+                              availableClasses.find(c => c.id === item.class_id)?.name || 'Unknown Class' :
+                              item.subject || 'Unknown Subject'
+                            }
+                          </Title>
                           <Paragraph style={{ color: theme.colors.text }}>
                             Topic: {
                               item.topic_id ? 
                               availableTopics.find(t => t.id === item.topic_id)?.name : 
-                              item.topic || 'N/A'
+                              item.topic || 'No Topic'
                             }
                           </Paragraph>
                           <Paragraph style={{ color: theme.colors.text }}>
@@ -694,25 +713,12 @@ export default function ParentScreen() {
                           <Paragraph style={{ color: theme.colors.text }}>
                             Engagement: {item.engagement_level}
                           </Paragraph>
-                          {item.homework_assigned && (
-                            <Paragraph style={{ color: theme.colors.text }}>
-                              Homework: {item.homework_assigned}
-                            </Paragraph>
-                          )}
-                          {item.tutor_notes && (
-                            <Paragraph style={{ color: theme.colors.text }}>
-                              Tutor Notes: {item.tutor_notes}
-                            </Paragraph>
-                          )}
-                          <Paragraph style={{ color: theme.colors.text }}>
-                            Parent Feedback: {item.parent_feedback || 'No feedback provided yet.'}
-                          </Paragraph>
+                          <Card.Actions>
+                            <Button onPress={() => handleOpenFeedbackModal(item)}>
+                              {item.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
+                            </Button>
+                          </Card.Actions>
                         </Card.Content>
-                        <Card.Actions>
-                          <Button onPress={() => handleOpenFeedbackModal(item)}>
-                            {item.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
-                          </Button>
-                        </Card.Actions>
                       </Card>
                     )}
                   />
@@ -802,6 +808,115 @@ export default function ParentScreen() {
                 Save Feedback
               </Button>
             </View>
+          </Modal>
+        </Portal>
+
+        {/* Add the Detail Modal */}
+        <Portal>
+          <Modal
+            visible={detailModalVisible}
+            onDismiss={() => {
+              setDetailModalVisible(false);
+              setSelectedNote(null);
+            }}
+            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.surface }]}
+          >
+            {selectedNote && (
+              <ScrollView>
+                <Title style={[styles.modalTitle, { color: theme.colors.text }]}>
+                  Session Details
+                </Title>
+                
+                <View style={styles.detailSection}>
+                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Class</Text>
+                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                    {selectedNote.class_id ? 
+                      availableClasses.find(c => c.id === selectedNote.class_id)?.name || 'Unknown Class' :
+                      selectedNote.subject || 'Unknown Subject'
+                    }
+                  </Text>
+                </View>
+
+                <View style={styles.detailSection}>
+                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Topic</Text>
+                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                    {selectedNote.topic_id ? 
+                      availableTopics.find(t => t.id === selectedNote.topic_id)?.name : 
+                      selectedNote.topic || 'N/A'
+                    }
+                  </Text>
+                </View>
+
+                <View style={styles.detailSection}>
+                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Date</Text>
+                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                    {format(new Date(selectedNote.session_date), "PPP")}
+                  </Text>
+                </View>
+
+                <View style={styles.detailSection}>
+                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Engagement Level</Text>
+                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                    {selectedNote.engagement_level}
+                  </Text>
+                </View>
+
+                {selectedNote.homework_assigned && (
+                  <View style={styles.detailSection}>
+                    <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Homework</Text>
+                    <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                      {selectedNote.homework_assigned}
+                    </Text>
+                  </View>
+                )}
+
+                {selectedNote.tutor_notes && (
+                  <View style={styles.detailSection}>
+                    <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Tutor Notes</Text>
+                    <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                      {selectedNote.tutor_notes}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.detailSection}>
+                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Parent Feedback</Text>
+                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                    {selectedNote.parent_feedback || 'No feedback provided yet.'}
+                  </Text>
+                </View>
+
+                {selectedNote.assignment_completion !== undefined && (
+                  <View style={styles.detailSection}>
+                    <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Assignment Completion</Text>
+                    <Text style={[styles.detailText, { color: theme.colors.primary }]}>
+                      {selectedNote.assignment_completion}%
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.modalButtons}>
+                  <Button
+                    mode="contained"
+                    onPress={() => {
+                      setDetailModalVisible(false);
+                      handleOpenFeedbackModal(selectedNote);
+                    }}
+                  >
+                    {selectedNote.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
+                  </Button>
+                  <Button
+                    onPress={() => {
+                      setDetailModalVisible(false);
+                      setSelectedNote(null);
+                    }}
+                    style={styles.closeButton}
+                  >
+                    Close
+                  </Button>
+                </View>
+              </ScrollView>
+            )}
           </Modal>
         </Portal>
 
@@ -972,5 +1087,21 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     borderRadius: 16,
     paddingHorizontal: 16,
+  },
+  detailSection: {
+    marginBottom: 16,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    opacity: 0.7,
+  },
+  detailText: {
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  closeButton: {
+    marginTop: 8,
   },
 });

@@ -19,6 +19,7 @@ import {
   MD3LightTheme,
   useTheme,
   adaptNavigationTheme,
+  Surface,
 } from "react-native-paper";
 import RNPickerSelect from "react-native-picker-select";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -109,6 +110,10 @@ export default function StudentView() {
   const [availableTopics, setAvailableTopics] = useState<Topic[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [loadingTopics, setLoadingTopics] = useState(false);
+
+  // Add to your state declarations
+  const [showCompletionRate, setShowCompletionRate] = useState(false);
+  const [assignmentCompletion, setAssignmentCompletion] = useState<string>('');
 
   useEffect(() => {
     fetchSessionNotes();
@@ -252,6 +257,14 @@ export default function StudentView() {
   const handleAddOrUpdateSessionNote = async () => {
     if (!id) return;
     
+    // Validate completion rate if provided
+    const completionRate = assignmentCompletion ? parseInt(assignmentCompletion, 10) : undefined;
+    if (completionRate !== undefined && (isNaN(completionRate) || completionRate < 0 || completionRate > 100)) {
+      setSnackbarMessage("Completion rate must be between 0 and 100");
+      setSnackbarVisible(true);
+      return;
+    }
+
     try {
       if (editingNote) {
         await updateSessionNote({
@@ -265,6 +278,7 @@ export default function StudentView() {
           understanding_level: understandingLevel,
           tutor_notes: tutorNotes,
           parent_feedback: parentFeedback,
+          assignment_completion: showCompletionRate ? completionRate : undefined,
         });
         setSnackbarMessage("Session note updated successfully!");
       } else {
@@ -279,6 +293,7 @@ export default function StudentView() {
           understanding_level: understandingLevel,
           tutor_notes: tutorNotes,
           parent_feedback: parentFeedback,
+          assignment_completion: showCompletionRate ? completionRate : undefined,
         });
         setSnackbarMessage("Session note added successfully!");
       }
@@ -304,6 +319,8 @@ export default function StudentView() {
     setUnderstandingLevel("Good");
     setTutorNotes("");
     setParentFeedback("");
+    setAssignmentCompletion('');
+    setShowCompletionRate(false);
     setEditingNote(null);
   };
 
@@ -325,6 +342,8 @@ export default function StudentView() {
     setUnderstandingLevel(note.understanding_level as any || "Good");
     setTutorNotes(note.tutor_notes || "");
     setParentFeedback(note.parent_feedback || "");
+    setAssignmentCompletion(note.assignment_completion?.toString() || '');
+    setShowCompletionRate(!!note.assignment_completion);
     setModalVisible(true);
   };
 
@@ -399,7 +418,16 @@ export default function StudentView() {
                 </Paragraph>
                 <Paragraph>Engagement: {item.engagement_level}</Paragraph>
                 <Paragraph>Understanding: {item.understanding_level}</Paragraph>
-                <Paragraph>Homework: {item.homework_assigned}</Paragraph>
+                {item.homework_assigned && (
+                  <>
+                    <Paragraph>Homework: {item.homework_assigned}</Paragraph>
+                    {item.assignment_completion !== undefined && (
+                      <Paragraph>
+                        Completion Rate: {item.assignment_completion}%
+                      </Paragraph>
+                    )}
+                  </>
+                )}
                 <Paragraph>Tutor Notes: {item.tutor_notes}</Paragraph>
                 <Paragraph>Parent Feedback: {item.parent_feedback}</Paragraph>
               </Card.Content>
@@ -460,7 +488,7 @@ export default function StudentView() {
                 )}
               </View>
 
-              {/* TOPIC SELECTION (Optional) */}
+              {/* TOPIC SELECTION */}
               {selectedClass && (
                 <View style={styles.formField}>
                   <Title style={styles.fieldLabel}>Topic (Optional)</Title>
@@ -501,7 +529,7 @@ export default function StudentView() {
                 />
               </View>
 
-              {/* LESSON SUMMARY INPUT */}
+              {/* LESSON SUMMARY */}
               <TextInput
                 label="Lesson Summary"
                 value={lessonSummary}
@@ -510,21 +538,13 @@ export default function StudentView() {
                 multiline
               />
 
-              {/* HOMEWORK INPUT */}
-              <TextInput
-                label="Homework Assigned"
-                value={homeworkAssigned}
-                onChangeText={setHomeworkAssigned}
-                style={styles.input}
-              />
-
-              {/* ENGAGEMENT LEVEL DROPDOWN */}
+              {/* ENGAGEMENT LEVEL */}
               <View style={styles.pickerContainer}>
                 <Title style={styles.fieldLabel}>Engagement Level</Title>
                 <RNPickerSelect
-                  onValueChange={(
-                    value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted"
-                  ) => setEngagementLevel(value)}
+                  onValueChange={(value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted") => 
+                    setEngagementLevel(value)
+                  }
                   items={[
                     { label: "Highly Engaged", value: "Highly Engaged" },
                     { label: "Engaged", value: "Engaged" },
@@ -538,7 +558,7 @@ export default function StudentView() {
                 />
               </View>
 
-              {/* UNDERSTANDING LEVEL DROPDOWN */}
+              {/* UNDERSTANDING LEVEL */}
               <View style={styles.pickerContainer}>
                 <Title style={styles.fieldLabel}>Understanding Level</Title>
                 <RNPickerSelect
@@ -558,6 +578,14 @@ export default function StudentView() {
                 />
               </View>
 
+              {/* HOMEWORK */}
+              <TextInput
+                label="Homework Assigned"
+                value={homeworkAssigned}
+                onChangeText={setHomeworkAssigned}
+                style={styles.input}
+              />
+
               {/* TUTOR NOTES */}
               <TextInput
                 label="Tutor Notes"
@@ -567,7 +595,42 @@ export default function StudentView() {
                 multiline
               />
 
-              {/* ADD/UPDATE BUTTON */}
+              {/* ASSIGNMENT COMPLETION - Moved to end */}
+              {homeworkAssigned && (
+                <View style={styles.completionSection}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setShowCompletionRate(!showCompletionRate)}
+                    style={styles.completionButton}
+                  >
+                    {showCompletionRate ? 'Hide Completion Rate' : 'Add Completion Rate'}
+                  </Button>
+                  
+                  {showCompletionRate && (
+                    <View style={styles.completionContainer}>
+                      <TextInput
+                        label="Completion Rate (%)"
+                        value={assignmentCompletion}
+                        onChangeText={(text) => {
+                          const numericValue = text.replace(/[^0-9]/g, '');
+                          if (numericValue === '' || parseInt(numericValue, 10) <= 100) {
+                            setAssignmentCompletion(numericValue);
+                          }
+                        }}
+                        keyboardType="numeric"
+                        style={styles.completionInput}
+                        placeholder="Enter completion rate (0-100)"
+                        maxLength={3}
+                      />
+                      <Paragraph style={styles.completionHelper}>
+                        Enter a value between 0 and 100
+                      </Paragraph>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* BUTTONS */}
               <Button
                 mode="contained"
                 onPress={handleAddOrUpdateSessionNote}
@@ -577,7 +640,6 @@ export default function StudentView() {
                 {editingNote ? "Update Note" : "Add Note"}
               </Button>
 
-              {/* CLOSE MODAL BUTTON */}
               <Button
                 onPress={() => {
                   setModalVisible(false);
@@ -660,6 +722,26 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     color: "#666",
     padding: 8,
+  },
+  completionSection: {
+    marginVertical: 8,
+    padding: 8,
+    borderRadius: 8,
+  },
+  completionButton: {
+    marginBottom: 8,
+  },
+  completionContainer: {
+    paddingHorizontal: 8,
+    marginTop: 8,
+  },
+  completionInput: {
+    marginBottom: 4,
+  },
+  completionHelper: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginBottom: 8,
   },
 });
 
