@@ -92,6 +92,18 @@ type AnalyticsData = {
   }>;
 };
 
+// Add these helper types
+type WeeklyNotes = {
+  weekStart: string;
+  notes: SessionNote[];
+};
+
+type ClassNotes = {
+  classId: string;
+  className: string;
+  weeklyNotes: WeeklyNotes[];
+};
+
 export default function ParentScreen() {
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? customDarkTheme : customLightTheme;
@@ -601,6 +613,54 @@ export default function ParentScreen() {
     setDetailModalVisible(true);
   };
 
+  // Add this function to organize notes by class and week
+  const organizeNotesByClassAndWeek = (notes: SessionNote[]): ClassNotes[] => {
+    // First, group notes by class
+    const notesByClass = notes.reduce((acc, note) => {
+      const classId = note.class_id || 'unassigned';
+      if (!acc[classId]) {
+        acc[classId] = [];
+      }
+      acc[classId].push(note);
+      return acc;
+    }, {} as Record<string, SessionNote[]>);
+
+    // Then, for each class, group notes by week
+    return Object.entries(notesByClass).map(([classId, classNotes]) => {
+      // Sort notes by date
+      const sortedNotes = [...classNotes].sort((a, b) => 
+        new Date(b.session_date).getTime() - new Date(a.session_date).getTime()
+      );
+
+      // Group by week
+      const weeklyNotes = sortedNotes.reduce((acc, note) => {
+        const noteDate = new Date(note.session_date);
+        // Get start of week (Sunday)
+        const weekStart = new Date(noteDate);
+        weekStart.setDate(noteDate.getDate() - noteDate.getDay());
+        const weekStartStr = format(weekStart, "yyyy-MM-dd");
+
+        const existingWeek = acc.find(w => w.weekStart === weekStartStr);
+        if (existingWeek) {
+          existingWeek.notes.push(note);
+        } else {
+          acc.push({
+            weekStart: weekStartStr,
+            notes: [note]
+          });
+        }
+        return acc;
+      }, [] as WeeklyNotes[]);
+
+      return {
+        classId,
+        className: classId === 'unassigned' ? 'Other' : 
+          availableClasses.find(c => c.id === classId)?.name || 'Unknown Class',
+        weeklyNotes
+      };
+    });
+  };
+
   return (
     <PaperProvider theme={theme}>
       <Appbar.Header>
@@ -684,44 +744,55 @@ export default function ParentScreen() {
                 {showAnalytics ? (
                   <AnalyticsView data={analyticsData} />
                 ) : (
-                  <FlatList
-                    data={sessionNotes}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContent}
-                    renderItem={({ item }) => (
-                      <Card 
-                        style={[styles.card, { backgroundColor: theme.colors.surface }]}
-                        onPress={() => handleViewNoteDetails(item)}
+                  <ScrollView>
+                    {organizeNotesByClassAndWeek(sessionNotes).map((classGroup) => (
+                      <Surface 
+                        key={classGroup.classId}
+                        style={[styles.classSection, { backgroundColor: theme.colors.surface }]}
                       >
-                        <Card.Content>
-                          <Title style={{ color: theme.colors.text }}>
-                            {item.class_id ? 
-                              availableClasses.find(c => c.id === item.class_id)?.name || 'Unknown Class' :
-                              item.subject || 'Unknown Subject'
-                            }
-                          </Title>
-                          <Paragraph style={{ color: theme.colors.text }}>
-                            Topic: {
-                              item.topic_id ? 
-                              availableTopics.find(t => t.id === item.topic_id)?.name : 
-                              item.topic || 'No Topic'
-                            }
-                          </Paragraph>
-                          <Paragraph style={{ color: theme.colors.text }}>
-                            Date: {format(new Date(item.session_date), "PPP")}
-                          </Paragraph>
-                          <Paragraph style={{ color: theme.colors.text }}>
-                            Engagement: {item.engagement_level}
-                          </Paragraph>
-                          <Card.Actions>
-                            <Button onPress={() => handleOpenFeedbackModal(item)}>
-                              {item.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
-                            </Button>
-                          </Card.Actions>
-                        </Card.Content>
-                      </Card>
-                    )}
-                  />
+                        <Title style={[styles.classTitle, { color: theme.colors.primary }]}>
+                          {classGroup.className}
+                        </Title>
+                        
+                        {classGroup.weeklyNotes.map((weekGroup) => (
+                          <List.Accordion
+                            key={weekGroup.weekStart}
+                            title={`Week of ${format(new Date(weekGroup.weekStart), "MMMM d, yyyy")}`}
+                            style={styles.weekAccordion}
+                          >
+                            {weekGroup.notes.map((note) => (
+                              <Card 
+                                key={note.id}
+                                style={[styles.noteCard, { backgroundColor: theme.colors.surfaceVariant }]}
+                                onPress={() => handleViewNoteDetails(note)}
+                              >
+                                <Card.Content>
+                                  <Paragraph style={{ color: theme.colors.text }}>
+                                    Topic: {
+                                      note.topic_id ? 
+                                      availableTopics.find(t => t.id === note.topic_id)?.name : 
+                                      note.topic || 'No Topic'
+                                    }
+                                  </Paragraph>
+                                  <Paragraph style={{ color: theme.colors.text }}>
+                                    Date: {format(new Date(note.session_date), "MMMM d, yyyy")}
+                                  </Paragraph>
+                                  <Paragraph style={{ color: theme.colors.text }}>
+                                    Engagement: {note.engagement_level}
+                                  </Paragraph>
+                                  <Card.Actions>
+                                    <Button onPress={() => handleOpenFeedbackModal(note)}>
+                                      {note.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
+                                    </Button>
+                                  </Card.Actions>
+                                </Card.Content>
+                              </Card>
+                            ))}
+                          </List.Accordion>
+                        ))}
+                      </Surface>
+                    ))}
+                  </ScrollView>
                 )}
               </View>
             )}
@@ -1103,5 +1174,24 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     marginTop: 8,
+  },
+  classSection: {
+    margin: 16,
+    borderRadius: 12,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  classTitle: {
+    padding: 16,
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  weekAccordion: {
+    backgroundColor: 'transparent',
+  },
+  noteCard: {
+    margin: 8,
+    marginHorizontal: 16,
+    elevation: 1,
   },
 });
