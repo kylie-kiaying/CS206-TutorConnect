@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ScrollView, StyleSheet, View, FlatList, useColorScheme } from "react-native";
+import { ScrollView, StyleSheet, View, FlatList, useColorScheme, Dimensions } from "react-native";
 import {
   TextInput,
   Button,
@@ -29,6 +29,7 @@ import { supabase } from "../../lib/supabase";
 import storage from "../../lib/storage";
 import { format } from "date-fns";
 import { useRouter } from "expo-router";
+import { LineChart, BarChart } from "react-native-chart-kit";
 
 // Custom theme with better dark mode colors
 const customLightTheme = {
@@ -65,7 +66,8 @@ type SessionNote = {
   topic: string;
   lesson_summary: string;
   homework_assigned: string;
-  engagement_level: string;
+  engagement_level: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted";
+  understanding_level: "Excellent" | "Good" | "Fair" | "Needs Improvement";
   tutor_notes: string;
   parent_feedback: string;
   class_id?: string;
@@ -76,6 +78,17 @@ type Student = {
   id: string;
   name: string;
   code?: string;
+};
+
+type AnalyticsData = {
+  dates: string[];
+  engagement: number[];
+  understanding: number[];
+  subjects: Record<string, {
+    dates: string[];
+    engagement: number[];
+    understanding: number[];
+  }>;
 };
 
 export default function ParentScreen() {
@@ -108,6 +121,25 @@ export default function ParentScreen() {
 
   // Add availableTopics state
   const [availableTopics, setAvailableTopics] = useState<Array<{id: string, name: string, class_id?: string}>>([]);
+
+  // Add these to your ParentScreen component state
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
+    dates: [],
+    engagement: [],
+    understanding: [],
+    subjects: {},
+  });
+
+  // Add this to your state declarations
+  const [availableClasses, setAvailableClasses] = useState<Array<{id: string, name: string, subject: string}>>([]);
+
+  // Create theme-dependent styles inside the component
+  const themedStyles = {
+    studentChipsWrapper: {
+      backgroundColor: theme.colors.background,
+    },
+  };
 
   useEffect(() => {
     loadParentData();
@@ -175,44 +207,53 @@ export default function ParentScreen() {
     setLoadingNotes(true);
     try {
       const notes = await getSessionNotesByCode(await getStudentCode(studentId));
+
       if (notes) {
-        setSessionNotes(notes);
-        
-        // Fetch all topics referenced in session notes
-        const topicIds = notes
-          .filter(note => note.topic_id)
-          .map(note => note.topic_id);
-        
-        if (topicIds.length > 0) {
-          try {
-            const { data: topics, error } = await supabase
-              .from('topics')
-              .select('id, name, class_id')
-              .in('id', topicIds);
-              
-            if (error) throw error;
+        const classIds = [...new Set(notes
+          .filter(note => note.class_id)
+          .map(note => note.class_id))];
+
+        if (classIds.length > 0) {
+          const { data: classes, error } = await supabase
+            .from('classes')
+            .select('id, name, subject')
+            .eq('id', classIds[0]);
+
+          if (error) {
+            console.error('Error fetching classes:', error);
+          } else if (classes && classes.length > 0) {
+            setAvailableClasses(classes);
             
-            if (topics && topics.length > 0) {
-              setAvailableTopics(prevTopics => {
-                // Combine with any existing topics without duplicates
-                const allTopics = [...prevTopics];
-                topics.forEach(topic => {
-                  if (!allTopics.some(t => t.id === topic.id)) {
-                    allTopics.push(topic);
-                  }
-                });
-                return allTopics;
-              });
-            }
-          } catch (error) {
-            console.error('Error fetching topics for notes:', error);
+            const notesWithSubjects = notes.map(note => {
+              const classInfo = classes.find(c => c.id === note.class_id);
+              return {
+                ...note,
+                subject: classInfo?.subject || classInfo?.name || 'Unknown Class'
+              };
+            });
+
+            setSessionNotes(notesWithSubjects);
+            processAnalyticsData(notesWithSubjects);
+          } else {
+            const notesWithSubjects = notes.map(note => ({
+              ...note,
+              subject: 'Unknown Class'
+            }));
+            setSessionNotes(notesWithSubjects);
+            processAnalyticsData(notesWithSubjects);
           }
         }
       } else {
         setSessionNotes([]);
+        setAnalyticsData({
+          dates: [],
+          engagement: [],
+          understanding: [],
+          subjects: {}
+        });
       }
     } catch (error) {
-      console.error("Error fetching session notes:", error);
+      console.error("Error in fetchSessionNotes:", error);
       setSnackbarMessage("Error loading session notes");
       setSnackbarVisible(true);
     } finally {
@@ -343,6 +384,212 @@ export default function ParentScreen() {
     }
   };
 
+  // Add this function to process session notes into analytics data
+  const processAnalyticsData = (notes: SessionNote[]) => {
+    const sortedNotes = [...notes].sort((a, b) => 
+      new Date(a.session_date).getTime() - new Date(b.session_date).getTime()
+    );
+
+    const engagementMap = {
+      'Highly Engaged': 4,
+      'Engaged': 3,
+      'Neutral': 2,
+      'Distracted': 1
+    };
+
+    const understandingMap = {
+      'Excellent': 4,
+      'Good': 3,
+      'Fair': 2,
+      'Needs Improvement': 1
+    };
+
+    const data: AnalyticsData = {
+      dates: [],
+      engagement: [],
+      understanding: [],
+      subjects: {},
+    };
+
+    sortedNotes.forEach(note => {
+      const formattedDate = format(new Date(note.session_date), 'MM/dd');
+      const engagementLevel = engagementMap[note.engagement_level] || 0;
+      const understandingLevel = understandingMap[note.understanding_level] || 0;
+
+      data.dates.push(formattedDate);
+      data.engagement.push(engagementLevel);
+      data.understanding.push(understandingLevel);
+
+      if (note.subject) {
+        if (!data.subjects[note.subject]) {
+          data.subjects[note.subject] = {
+            dates: [],
+            engagement: [],
+            understanding: []
+          };
+        }
+        data.subjects[note.subject].dates.push(formattedDate);
+        data.subjects[note.subject].engagement.push(engagementLevel);
+        data.subjects[note.subject].understanding.push(understandingLevel);
+      }
+    });
+
+    setAnalyticsData(data);
+  };
+
+  // Update the AnalyticsView component
+  const AnalyticsView = ({ data }: { data: AnalyticsData }) => {
+    const screenWidth = Dimensions.get('window').width;
+    const [selectedSubject, setSelectedSubject] = useState<string>('all');
+
+    return (
+      <View style={styles.analyticsContainer}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.analyticsScrollContent}
+        >
+          {/* Subject Filter */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.subjectFilter}
+          >
+            <Chip
+              selected={selectedSubject === 'all'}
+              onPress={() => setSelectedSubject('all')}
+              style={styles.subjectChip}
+            >
+              All Subjects
+            </Chip>
+            {Object.keys(data.subjects).map(subject => (
+              <Chip
+                key={subject}
+                selected={selectedSubject === subject}
+                onPress={() => setSelectedSubject(subject)}
+                style={styles.subjectChip}
+              >
+                {subject}
+              </Chip>
+            ))}
+          </ScrollView>
+
+          {/* Analytics Cards */}
+          <Surface style={styles.statsCard}>
+            <Title style={styles.statsTitle}>Performance Overview</Title>
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Average Engagement</Text>
+                <Text style={styles.statValue}>
+                  {(data.engagement.reduce((a, b) => a + b, 0) / data.engagement.length).toFixed(1)}
+                </Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Average Understanding</Text>
+                <Text style={styles.statValue}>
+                  {(data.understanding.reduce((a, b) => a + b, 0) / data.understanding.length).toFixed(1)}
+                </Text>
+              </View>
+            </View>
+          </Surface>
+
+          {/* Engagement Chart */}
+          <Surface style={styles.chartCard}>
+            <Title style={styles.chartTitle}>Student Engagement</Title>
+            <View style={styles.chartWrapper}>
+              <LineChart
+                data={{
+                  labels: data.dates,
+                  datasets: [{ 
+                    data: data.engagement,
+                    color: (opacity = 1) => theme.colors.primary,
+                    strokeWidth: 2,
+                  }],
+                }}
+                width={screenWidth - 80}
+                height={220}
+                chartConfig={{
+                  backgroundColor: 'transparent',
+                  backgroundGradientFrom: theme.colors.surface,
+                  backgroundGradientTo: theme.colors.surface,
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => theme.colors.primary,
+                  labelColor: (opacity = 1) => theme.colors.text,
+                  strokeWidth: 2,
+                  propsForBackgroundLines: {
+                    strokeWidth: 1,
+                    stroke: theme.colors.text,
+                    strokeOpacity: 0.1,
+                  },
+                  propsForLabels: {
+                    display: 'none',
+                  },
+                }}
+                bezier
+                style={styles.chart}
+                withVerticalLines={false}
+                withHorizontalLines={true}
+                withDots={true}
+                withShadow={false}
+                segments={4}
+                withVerticalLabels={false}
+                withHorizontalLabels={false}
+                formatYLabel={() => ''}
+                fromZero={true}
+              />
+            </View>
+          </Surface>
+
+          {/* Understanding Chart */}
+          <Surface style={styles.chartCard}>
+            <Title style={styles.chartTitle}>Topic Understanding</Title>
+            <View style={styles.chartWrapper}>
+              <LineChart
+                data={{
+                  labels: data.dates,
+                  datasets: [{ 
+                    data: data.understanding,
+                    color: (opacity = 1) => theme.colors.secondary || theme.colors.primary,
+                    strokeWidth: 2,
+                  }],
+                }}
+                width={screenWidth - 80}
+                height={220}
+                chartConfig={{
+                  backgroundColor: 'transparent',
+                  backgroundGradientFrom: theme.colors.surface,
+                  backgroundGradientTo: theme.colors.surface,
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => theme.colors.secondary || theme.colors.primary,
+                  labelColor: (opacity = 1) => theme.colors.text,
+                  strokeWidth: 2,
+                  propsForBackgroundLines: {
+                    strokeWidth: 1,
+                    stroke: theme.colors.text,
+                    strokeOpacity: 0.1,
+                  },
+                  propsForLabels: {
+                    display: 'none',
+                  },
+                }}
+                bezier
+                style={styles.chart}
+                withVerticalLines={false}
+                withHorizontalLines={true}
+                withDots={true}
+                withShadow={false}
+                segments={4}
+                withVerticalLabels={false}
+                withHorizontalLabels={false}
+                formatYLabel={() => ''}
+                fromZero={true}
+              />
+            </View>
+          </Surface>
+        </ScrollView>
+      </View>
+    );
+  };
+
   return (
     <PaperProvider theme={theme}>
       <Appbar.Header>
@@ -372,51 +619,64 @@ export default function ParentScreen() {
         ) : (
           <>
             {/* Student selector chips */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.studentChipsContainer}
-            >
-              {students.map(student => (
-                <Chip
-                  key={student.id}
-                  selected={selectedStudent?.id === student.id}
-                  onPress={() => setSelectedStudent(student)}
-                  style={[
-                    styles.studentChip,
-                    selectedStudent?.id === student.id && { 
-                      backgroundColor: theme.colors.primaryContainer 
-                    }
-                  ]}
-                  mode="outlined"
-                >
-                  {student.name}
-                </Chip>
-              ))}
-            </ScrollView>
+            <View style={[
+              styles.studentChipsWrapper, 
+              themedStyles.studentChipsWrapper
+            ]}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[
+                  styles.studentChipsContainer,
+                  themedStyles.studentChipsWrapper
+                ]}
+              >
+                {students.map(student => (
+                  <Chip
+                    key={student.id}
+                    selected={selectedStudent?.id === student.id}
+                    onPress={() => setSelectedStudent(student)}
+                    style={[
+                      styles.studentChip,
+                      selectedStudent?.id === student.id && { 
+                        backgroundColor: theme.colors.primaryContainer 
+                      }
+                    ]}
+                    mode="outlined"
+                  >
+                    {student.name}
+                  </Chip>
+                ))}
+              </ScrollView>
+            </View>
 
             {/* Session notes for selected student */}
-            {selectedStudent ? (
-              <>
-                <Surface style={[styles.studentHeader, { backgroundColor: theme.colors.surfaceVariant }]}>
-                  <Title style={{ color: theme.colors.text }}>{selectedStudent.name}'s Progress</Title>
-                </Surface>
+            {selectedStudent && !loadingNotes && (
+              <View style={styles.contentContainer}>
+                <View style={styles.tabButtons}>
+                  <Button
+                    mode={!showAnalytics ? "contained" : "outlined"}
+                    onPress={() => setShowAnalytics(false)}
+                    style={styles.tabButton}
+                  >
+                    Session Notes
+                  </Button>
+                  <Button
+                    mode={showAnalytics ? "contained" : "outlined"}
+                    onPress={() => setShowAnalytics(true)}
+                    style={styles.tabButton}
+                  >
+                    Analytics
+                  </Button>
+                </View>
                 
-                {loadingNotes ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" />
-                    <Text style={{ marginTop: 10, color: theme.colors.text }}>Loading notes...</Text>
-                  </View>
-                ) : sessionNotes.length === 0 ? (
-                  <View style={styles.emptyStateContainer}>
-                    <Text style={[styles.emptyStateText, { color: theme.colors.text }]}>
-                      No session notes available for this student yet.
-                    </Text>
-                  </View>
+                {showAnalytics ? (
+                  <AnalyticsView data={analyticsData} />
                 ) : (
                   <FlatList
                     data={sessionNotes}
                     keyExtractor={(item) => item.id}
+                    contentContainerStyle={styles.listContent}
                     renderItem={({ item }) => (
                       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
                         <Card.Content>
@@ -457,8 +717,8 @@ export default function ParentScreen() {
                     )}
                   />
                 )}
-              </>
-            ) : null}
+              </View>
+            )}
           </>
         )}
         
@@ -570,6 +830,12 @@ const styles = StyleSheet.create({
   studentChipsContainer: {
     padding: 16,
     paddingBottom: 8,
+    height: 80,
+  },
+  studentChipsWrapper: {
+    height: 80,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(128,128,128,0.2)',
   },
   studentChip: {
     marginRight: 8,
@@ -627,5 +893,84 @@ const styles = StyleSheet.create({
   },
   addFirstStudentButton: {
     marginTop: 20,
+  },
+  contentContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  tabButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    padding: 16,
+    gap: 8,
+  },
+  tabButton: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  analyticsContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  analyticsScrollContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+  },
+  chartCard: {
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  chartWrapper: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  chartTitle: {
+    fontSize: 18,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  subjectFilter: {
+    marginBottom: 16,
+  },
+  subjectChip: {
+    marginRight: 8,
+  },
+  statsCard: {
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  statsTitle: {
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  chart: {
+    marginVertical: 8,
+    borderRadius: 16,
+    paddingHorizontal: 16,
   },
 });

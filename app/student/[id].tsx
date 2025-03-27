@@ -98,6 +98,9 @@ export default function StudentView() {
   const [engagementLevel, setEngagementLevel] = useState<
     "Highly Engaged" | "Engaged" | "Neutral" | "Distracted"
   >("Engaged");
+  const [understandingLevel, setUnderstandingLevel] = useState<
+    "Excellent" | "Good" | "Fair" | "Needs Improvement"
+  >("Good");
   const [tutorNotes, setTutorNotes] = useState("");
   const [parentFeedback, setParentFeedback] = useState("");
 
@@ -259,6 +262,7 @@ export default function StudentView() {
           lesson_summary: lessonSummary,
           homework_assigned: homeworkAssigned,
           engagement_level: engagementLevel,
+          understanding_level: understandingLevel,
           tutor_notes: tutorNotes,
           parent_feedback: parentFeedback,
         });
@@ -272,6 +276,7 @@ export default function StudentView() {
           lesson_summary: lessonSummary,
           homework_assigned: homeworkAssigned,
           engagement_level: engagementLevel,
+          understanding_level: understandingLevel,
           tutor_notes: tutorNotes,
           parent_feedback: parentFeedback,
         });
@@ -296,6 +301,7 @@ export default function StudentView() {
     setLessonSummary("");
     setHomeworkAssigned("");
     setEngagementLevel("Engaged");
+    setUnderstandingLevel("Good");
     setTutorNotes("");
     setParentFeedback("");
     setEditingNote(null);
@@ -316,6 +322,7 @@ export default function StudentView() {
     setLessonSummary(note.lesson_summary || "");
     setHomeworkAssigned(note.homework_assigned || "");
     setEngagementLevel(note.engagement_level as any || "Engaged");
+    setUnderstandingLevel(note.understanding_level as any || "Good");
     setTutorNotes(note.tutor_notes || "");
     setParentFeedback(note.parent_feedback || "");
     setModalVisible(true);
@@ -391,6 +398,7 @@ export default function StudentView() {
                   Date: {format(new Date(item.session_date), "PPPp")}
                 </Paragraph>
                 <Paragraph>Engagement: {item.engagement_level}</Paragraph>
+                <Paragraph>Understanding: {item.understanding_level}</Paragraph>
                 <Paragraph>Homework: {item.homework_assigned}</Paragraph>
                 <Paragraph>Tutor Notes: {item.tutor_notes}</Paragraph>
                 <Paragraph>Parent Feedback: {item.parent_feedback}</Paragraph>
@@ -526,6 +534,26 @@ export default function StudentView() {
                   value={engagementLevel}
                   style={pickerSelectStyles}
                   placeholder={{ label: "Select engagement level...", value: null }}
+                  useNativeAndroidPickerStyle={false}
+                />
+              </View>
+
+              {/* UNDERSTANDING LEVEL DROPDOWN */}
+              <View style={styles.pickerContainer}>
+                <Title style={styles.fieldLabel}>Understanding Level</Title>
+                <RNPickerSelect
+                  onValueChange={(value: "Excellent" | "Good" | "Fair" | "Needs Improvement") => 
+                    setUnderstandingLevel(value)
+                  }
+                  items={[
+                    { label: "Excellent", value: "Excellent" },
+                    { label: "Good", value: "Good" },
+                    { label: "Fair", value: "Fair" },
+                    { label: "Needs Improvement", value: "Needs Improvement" },
+                  ]}
+                  value={understandingLevel}
+                  style={pickerSelectStyles}
+                  placeholder={{ label: "Select understanding level...", value: null }}
                   useNativeAndroidPickerStyle={false}
                 />
               </View>
