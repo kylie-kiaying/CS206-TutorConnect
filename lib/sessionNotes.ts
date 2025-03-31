@@ -12,8 +12,8 @@ export type SessionNote = {
   lesson_summary: string;
   homework_assigned: string;
   homework?: string; // alias for homework_assigned for compatibility
-  engagement_level: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted";
-  understanding_level: "Excellent" | "Good" | "Fair" | "Needs Improvement";
+  engagement_level: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted" | "Unattentive";
+  understanding_level: "Excellent" | "Good" | "Fair" | "Needs Improvement" | "Poor" ;
   tutor_notes: string;
   notes?: string; // alias for tutor_notes for compatibility
   parent_feedback: string;

@@ -31,6 +31,7 @@ import storage from "../../lib/storage";
 import { format } from "date-fns";
 import { useRouter } from "expo-router";
 import { LineChart, BarChart } from "react-native-chart-kit";
+import ImageModal from '../../components/ImageModal';
 
 // Custom theme with better dark mode colors
 const customLightTheme = {
@@ -69,8 +70,8 @@ export type SessionNote = {
   lesson_summary: string;
   homework_assigned: string;
   homework?: string; // alias for homework_assigned for compatibility
-  engagement_level: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted";
-  understanding_level: "Excellent" | "Good" | "Fair" | "Needs Improvement";
+  engagement_level: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted" | "Unattentive";
+  understanding_level: "Excellent" | "Good" | "Fair" | "Needs Improvement" | "Poor" ;
   tutor_notes: string;
   notes?: string; // alias for tutor_notes for compatibility
   parent_feedback: string;
@@ -107,10 +108,7 @@ export type AnalyticsData = {
   averageScore: number;
   improvementRate: number;
   attendanceRate: number;
-  recentActivity: Array<{
-    date: string;
-    description: string;
-  }>;
+  recentActivity: SessionNote[];
 };
 
 // Add these helper types
@@ -167,8 +165,24 @@ export default function ParentScreen() {
     averageScore: 0,
     improvementRate: 0,
     attendanceRate: 0,
-    recentActivity: [],
+    recentActivity: []
   });
+
+  const engagementMap = {
+    'Unattentive': 1,
+    'Distracted': 2,
+    'Neutral': 3,
+    'Engaged': 4,
+    'Highly Engaged': 5
+  };
+
+  const understandingMap = {
+    'Poor': 1,
+    'Needs Improvement': 2,
+    'Fair': 3,
+    'Good': 4,
+    'Excellent': 5
+  };
 
   // Add this to your state declarations
   const [availableClasses, setAvailableClasses] = useState<Array<{id: string, name: string, subject: string}>>([]);
@@ -179,6 +193,10 @@ export default function ParentScreen() {
 
   // Add state for collapsed months
   const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
+
+  // Add state for selected image
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
 
   // Create theme-dependent styles inside the component
   const themedStyles = {
@@ -306,7 +324,7 @@ export default function ParentScreen() {
 
             setSessionNotes(notesWithSubjects);
             processAnalyticsData(notesWithSubjects);
-          } else {
+    } else {
             const notesWithSubjects = notes.map(note => ({
               ...note,
               subject: 'Unknown Class'
@@ -326,13 +344,13 @@ export default function ParentScreen() {
           averageScore: 0,
           improvementRate: 0,
           attendanceRate: 0,
-          recentActivity: [],
+          recentActivity: []
         });
       }
     } catch (error) {
       console.error("Error in fetchSessionNotes:", error);
       setSnackbarMessage("Error loading session notes");
-      setSnackbarVisible(true);
+    setSnackbarVisible(true);
     } finally {
       setLoadingNotes(false);
     }
@@ -447,7 +465,7 @@ export default function ParentScreen() {
           | "Distracted",
       });
         
-        setFeedbackModalVisible(false);
+      setFeedbackModalVisible(false);
       setSnackbarMessage("Feedback updated successfully!");
         setSnackbarVisible(true);
         
@@ -467,20 +485,6 @@ export default function ParentScreen() {
       new Date(a.session_date).getTime() - new Date(b.session_date).getTime()
     );
 
-    const engagementMap = {
-      'Highly Engaged': 4,
-      'Engaged': 3,
-      'Neutral': 2,
-      'Distracted': 1
-    };
-
-    const understandingMap = {
-      'Excellent': 4,
-      'Good': 3,
-      'Fair': 2,
-      'Needs Improvement': 1
-    };
-
     const data: AnalyticsData = {
       dates: [],
       engagement: [],
@@ -490,7 +494,7 @@ export default function ParentScreen() {
       averageScore: 0,
       improvementRate: 0,
       attendanceRate: 0,
-      recentActivity: [],
+      recentActivity: sortedNotes.slice(0, 5) // Get 5 most recent notes
     };
 
     sortedNotes.forEach(note => {
@@ -515,6 +519,23 @@ export default function ParentScreen() {
         data.subjects[note.subject].understanding.push(understandingLevel);
       }
     });
+
+    // Calculate metrics
+    data.totalHours = sortedNotes.length * 1; // Assuming 1 hour per session
+    data.averageScore = data.understanding.reduce((a, b) => a + b, 0) / data.understanding.length;
+    
+    // Calculate improvement rate (comparing first and last 3 sessions)
+    const firstThree = data.understanding.slice(0, 3);
+    const lastThree = data.understanding.slice(-3);
+    const firstAvg = firstThree.reduce((a, b) => a + b, 0) / firstThree.length;
+    const lastAvg = lastThree.reduce((a, b) => a + b, 0) / lastThree.length;
+    data.improvementRate = ((lastAvg - firstAvg) / firstAvg) * 100;
+
+    // Calculate attendance rate (assuming 2 sessions per week)
+    const weeks = Math.ceil((new Date(sortedNotes[sortedNotes.length - 1].session_date).getTime() - 
+      new Date(sortedNotes[0].session_date).getTime()) / (7 * 24 * 60 * 60 * 1000));
+    const expectedSessions = weeks * 2;
+    data.attendanceRate = (sortedNotes.length / expectedSessions) * 100;
 
     setAnalyticsData(data);
   };
@@ -582,28 +603,55 @@ export default function ParentScreen() {
     const averages = getAverages();
 
     // Update chart configuration
-    const chartConfig = {
-      backgroundColor: 'transparent',
-      backgroundGradientFrom: theme.colors.surface,
-      backgroundGradientTo: theme.colors.surface,
-      decimalPlaces: 0,
-      color: (opacity = 1) => selectedSubject === 'all' 
-        ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
-        : getSubjectColor(selectedSubject),
-      labelColor: (opacity = 1) => theme.colors.text,
-      strokeWidth: 2,
-      propsForBackgroundLines: {
-        strokeWidth: 1,
-        stroke: theme.colors.text,
-        strokeOpacity: 0.1,
-      },
-      propsForLabels: {
-        fontSize: 10,
-      },
-      formatYLabel: (yLabel: string) => {
-        const value = parseInt(yLabel, 10);
-        const labels = ['', 'Low', '', 'Med', '', 'High'];
-        return labels[value] || '';
+    const engagementChartConfig = {
+      labels: filteredData.dates,
+      datasets: [{
+        data: filteredData.engagement,
+        color: (opacity = 1) => selectedSubject === 'all' 
+          ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
+          : getSubjectColor(selectedSubject),
+        strokeWidth: 2
+      }],
+      options: {
+        scales: {
+          y: {
+            min: 0,
+            max: 5,
+            ticks: {
+              stepSize: 1,
+              callback: (value: number) => {
+                const labels = ['', 'Low', '', 'Med', '', 'High'];
+                return labels[value] || '';
+              }
+            }
+          }
+        }
+      }
+    };
+
+    const understandingChartConfig = {
+      labels: filteredData.dates,
+      datasets: [{
+        data: filteredData.understanding,
+        color: (opacity = 1) => selectedSubject === 'all'
+          ? `rgba(76, 175, 80, ${opacity})`  // Default green for 'all'
+          : getSubjectColor(selectedSubject),
+        strokeWidth: 2
+      }],
+      options: {
+        scales: {
+          y: {
+            min: 0,
+            max: 5,
+            ticks: {
+              stepSize: 1,
+              callback: (value: number) => {
+                const labels = ['', 'Basic', '', 'Good', '', 'Exc'];
+                return labels[value] || '';
+              }
+            }
+          }
+        }
       }
     };
 
@@ -684,16 +732,7 @@ export default function ParentScreen() {
             <Title style={styles.chartTitle}>Student Engagement</Title>
             <View style={styles.chartWrapper}>
               <LineChart
-                data={{
-                  labels: filteredData.dates,
-                  datasets: [{ 
-                    data: filteredData.engagement,
-                    color: (opacity = 1) => selectedSubject === 'all' 
-                      ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
-                      : getSubjectColor(selectedSubject),
-                    strokeWidth: 2,
-                  }],
-                }}
+                data={engagementChartConfig}
                 width={screenWidth - 80}
                 height={220}
                 chartConfig={{
@@ -746,16 +785,7 @@ export default function ParentScreen() {
             <Title style={styles.chartTitle}>Topic Understanding</Title>
             <View style={styles.chartWrapper}>
               <LineChart
-                data={{
-                  labels: filteredData.dates,
-                  datasets: [{ 
-                    data: filteredData.understanding,
-                    color: (opacity = 1) => selectedSubject === 'all'
-                      ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
-                      : getSubjectColor(selectedSubject),
-                    strokeWidth: 2,
-                  }],
-                }}
+                data={understandingChartConfig}
                 width={screenWidth - 80}
                 height={220}
                 chartConfig={{
@@ -764,7 +794,7 @@ export default function ParentScreen() {
                   backgroundGradientTo: theme.colors.surface,
                   decimalPlaces: 0,
                   color: (opacity = 1) => selectedSubject === 'all'
-                    ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
+                    ? `rgba(76, 175, 80, ${opacity})`  // Default green for 'all'
                     : getSubjectColor(selectedSubject),
                   labelColor: (opacity = 1) => theme.colors.text,
                   strokeWidth: 2,
@@ -893,6 +923,12 @@ export default function ParentScreen() {
     return `hsl(${h}, 70%, 90%)`;
   };
 
+  // Add this function to handle image press
+  const handleImagePress = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalVisible(true);
+  };
+
   return (
     <PaperProvider theme={theme}>
       <Appbar.Header>
@@ -911,13 +947,13 @@ export default function ParentScreen() {
             <Text style={[styles.emptyStateText, { color: theme.colors.text }]}>
               You don't have any students linked to your account yet.
             </Text>
-            <Button 
-              mode="contained" 
+        <Button
+          mode="contained"
               onPress={() => setAddStudentModalVisible(true)}
               style={styles.addFirstStudentButton}
-            >
+        >
               Link a Student
-            </Button>
+        </Button>
           </View>
         ) : (
           <>
@@ -965,7 +1001,7 @@ export default function ParentScreen() {
                     style={styles.tabButton}
                   >
                     Session Notes
-                  </Button>
+              </Button>
                   <Button
                     mode={showAnalytics ? "contained" : "outlined"}
                     onPress={() => setShowAnalytics(true)}
@@ -1018,10 +1054,12 @@ export default function ParentScreen() {
                                   onPress={() => handleViewNoteDetails(note)}
                                 >
                                   {note.file_url ? (
-                                    <Image
-                                      source={{ uri: note.file_url }}
-                                      style={styles.sessionImage}
-                                    />
+                                    <TouchableOpacity onPress={() => handleImagePress(note.file_url!)}>
+                                      <Image
+                                        source={{ uri: note.file_url }}
+                                        style={styles.sessionImage}
+                                      />
+                                    </TouchableOpacity>
                                   ) : (
                                     <View style={[styles.sessionImage, styles.noImagePlaceholder]}>
                                       <Icon source="image-off" size={24} color="#A6A6A6" />
@@ -1133,7 +1171,7 @@ export default function ParentScreen() {
               onPress={handleSaveFeedback}
             >
               Save Feedback
-              </Button>
+            </Button>
             </View>
           </Modal>
         </Portal>
@@ -1188,6 +1226,13 @@ export default function ParentScreen() {
                   </Text>
                 </View>
 
+                <View style={styles.detailSection}>
+                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Topic Understanding</Text>
+                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                    {selectedNote.understanding_level}
+                  </Text>
+                </View>
+
                 {selectedNote.homework_assigned && (
                   <View style={styles.detailSection}>
                     <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Homework</Text>
@@ -1223,7 +1268,7 @@ export default function ParentScreen() {
                 )}
 
                 <View style={styles.modalButtons}>
-                  <Button
+            <Button
                     mode="contained"
                     onPress={() => {
                       setDetailModalVisible(false);
@@ -1255,6 +1300,16 @@ export default function ParentScreen() {
         >
           {snackbarMessage}
         </Snackbar>
+
+        {/* Add ImageModal at the end of the component, before the closing PaperProvider tag */}
+        <ImageModal
+          visible={imageModalVisible}
+          imageUrl={selectedImage || ''}
+          onClose={() => {
+            setImageModalVisible(false);
+            setSelectedImage(null);
+          }}
+        />
       </View>
     </PaperProvider>
   );

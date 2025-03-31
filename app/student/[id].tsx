@@ -42,6 +42,7 @@ import * as ImagePicker from 'expo-image-picker';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import ImageModal from '../../components/ImageModal';
 
 type Class = {
   id: string;
@@ -60,10 +61,11 @@ type TopicsByChapter = {
   [chapter: string]: Topic[];
 };
 
-type EngagementLevel = "Highly Engaged" | "Engaged" | "Neutral" | "Distracted";
+type EngagementLevel = "Highly Engaged" | "Engaged" | "Neutral" | "Distracted" | "Unattentive";
 
 const engagementLevelMap = {
-  'Distracted': 1,
+  'Unattentive': 1,
+  'Distracted': 2,
   'Neutral': 3,
   'Engaged': 4,
   'Highly Engaged': 5,
@@ -274,12 +276,20 @@ const styles = StyleSheet.create({
   sliderLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
     marginTop: 8,
+    width: '100%',
   },
   sliderLabel: {
     fontSize: 12,
     color: '#666',
+    textAlign: 'center',
+  },
+  sliderLabelStart: {
+    textAlign: 'left',
+  },
+  sliderLabelEnd: {
+    textAlign: 'right',
   },
   imageUploadContainer: {
     borderWidth: 1,
@@ -584,6 +594,7 @@ export default function StudentView() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [editingNote, setEditingNote] = useState<SessionNote | null>(null);
+  const [studentName, setStudentName] = useState<string>("");
 
   // Sorting & Filtering States
   const [sortOrder, setSortOrder] = useState<"Newest" | "Oldest">("Newest");
@@ -597,7 +608,7 @@ export default function StudentView() {
   const [homeworkAssigned, setHomeworkAssigned] = useState("");
   const [engagementLevel, setEngagementLevel] = useState<EngagementLevel>("Engaged");
   const [understandingLevel, setUnderstandingLevel] = useState<
-    "Excellent" | "Good" | "Fair" | "Needs Improvement"
+    "Excellent" | "Good" | "Fair"  | "Needs Improvement" | "Poor"
   >("Good");
   const [tutorNotes, setTutorNotes] = useState("");
   const [parentFeedback, setParentFeedback] = useState("");
@@ -617,6 +628,7 @@ export default function StudentView() {
 
   // New state for image upload
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
 
   // New state for topic selection
   const [topicSearchQuery, setTopicSearchQuery] = useState('');
@@ -635,9 +647,6 @@ export default function StudentView() {
   const [nextSession, setNextSession] = useState<Date | null>(null);
   const [showNextSessionPicker, setShowNextSessionPicker] = useState(false);
 
-  // Add to state declarations
-  const [topicProficiency, setTopicProficiency] = useState<number>(1);
-
   // Add this state for collapsed months
   const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
 
@@ -651,6 +660,7 @@ export default function StudentView() {
   useEffect(() => {
     fetchSessionNotes();
     fetchAvailableClasses();
+    fetchStudentName();
   }, []);
 
   useEffect(() => {
@@ -793,6 +803,26 @@ export default function StudentView() {
     }
   };
 
+  const fetchStudentName = async () => {
+    if (id) {
+      try {
+        const { data, error } = await supabase
+          .from('students')
+          .select('name')
+          .eq('id', id)
+          .single();
+          
+        if (error) throw error;
+        
+        if (data) {
+          setStudentName(data.name);
+        }
+      } catch (error) {
+        console.error('Error fetching student name:', error);
+      }
+    }
+  };
+
   // Apply Sorting and Filtering
   const applyFiltersAndSorting = () => {
     let filtered = sessionNotes;
@@ -834,7 +864,6 @@ export default function StudentView() {
         tutor_notes: tutorNotes,
         parent_feedback: '',
         file_url: selectedImage || "",
-        topic_proficiency: topicProficiency,
       };
 
       if (editingNote) {
@@ -875,7 +904,7 @@ export default function StudentView() {
     setSelectedImage(null);
     setTopicSearchQuery('');
     setSelectedTopics([]);
-    setTopicProficiency(1);
+    setCollapsedMonths({});
   };
 
   const handleDeleteSessionNote = async (noteId: string) => {
@@ -899,7 +928,7 @@ export default function StudentView() {
     setAssignmentCompletion(note.assignment_completion?.toString() || '');
     setShowCompletionRate(!!note.assignment_completion);
     setSelectedImage(note.file_url || null);
-    setTopicProficiency(note.topic_proficiency || 1);
+    setCollapsedMonths({});
     setModalVisible(true);
   };
 
@@ -1021,6 +1050,12 @@ export default function StudentView() {
     }));
   };
 
+  // Add this function to handle image press
+  const handleImagePress = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalVisible(true);
+  };
+
   return (
     <PaperProvider>
       <Appbar.Header>
@@ -1077,15 +1112,17 @@ export default function StudentView() {
                             </Text>
                           </View>
                           {note.file_url && (
-                            <Image
-                              source={{ uri: note.file_url }}
-                              style={styles.noteImage}
-                            />
+                            <TouchableOpacity onPress={() => handleImagePress(note.file_url!)}>
+                              <Image
+                                source={{ uri: note.file_url }}
+                                style={styles.noteImage}
+                              />
+                            </TouchableOpacity>
                           )}
         </View>
 
                         <Text>
-                          Bob was <Text style={{
+                          {studentName || 'The student'} was <Text style={{
                             color: note.engagement_level === 'Highly Engaged' ? '#4CAF50' : 
                                    note.engagement_level === 'Engaged' ? '#FFB700' : '#FF4B4B'
                           }}>{note.engagement_level.toLowerCase()}</Text> this lesson.
@@ -1103,14 +1140,13 @@ export default function StudentView() {
                         </View>
 
                         <View style={styles.proficiencyRow}>
-                          <Text style={styles.proficiencyLabel}>Topic Proficiency: </Text>
-                          <Text style={[styles.proficiencyValue, { color: '#FF4B4B' }]}>
-                            {note.topic_proficiency ? 
-                              `${note.topic_proficiency}/10 - ${
-                                note.topic_proficiency <= 3 ? 'Beginner' :
-                                note.topic_proficiency <= 7 ? 'Intermediate' : 'Advanced'
-                              }` : 
-                              'Not Rated'}
+                          <Text style={styles.proficiencyLabel}>Topic Understanding: </Text>
+                          <Text style={[styles.proficiencyValue, { 
+                            color: note.understanding_level === 'Excellent' ? '#4CAF50' : 
+                                   note.understanding_level === 'Good' ? '#FFB700' : 
+                                   note.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B'
+                          }]}>
+                            {note.understanding_level}
                           </Text>
                         </View>
 
@@ -1376,11 +1412,52 @@ export default function StudentView() {
                   />
                 </View>
                 <View style={styles.sliderLabels}>
-                  <Text style={styles.sliderLabel}>Distracted</Text>
+                  <Text style={[styles.sliderLabel, styles.sliderLabelStart]}>Unattentive</Text>
                   <Text style={styles.sliderLabel}>Neutral</Text>
-                  <Text style={styles.sliderLabel}>Highly Engaged</Text>
+                  <Text style={[styles.sliderLabel, styles.sliderLabelEnd]}>Highly Engaged</Text>
                 </View>
-            </View>
+              </View>
+
+              {/* Understanding Level */}
+              <View style={styles.formField}>
+                <Text style={styles.inputHeader}>Understanding Level</Text>
+                <View style={styles.sliderContainer}>
+                  <LinearGradient
+                    colors={['#FF4B4B', '#FFB700', '#4CAF50']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.sliderTrack, { position: 'absolute', width: '100%' }]}
+                  />
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={0}
+                    maximumValue={4}
+                    step={1}
+                    value={
+                      understandingLevel === 'Poor' ? 0 :
+                      understandingLevel === 'Needs Improvement' ? 1 :
+                      understandingLevel === 'Fair' ? 2 :
+                      understandingLevel === 'Good' ? 3 : 4
+                    }
+                    onValueChange={(value: number) => {
+                      setUnderstandingLevel(
+                        value === 0 ? 'Poor' :
+                        value === 1 ? 'Needs Improvement' :
+                        value === 2 ? 'Fair' :
+                        value === 3 ? 'Good' : 'Excellent'
+                      );
+                    }}
+                    minimumTrackTintColor="transparent"
+                    maximumTrackTintColor="transparent"
+                    thumbTintColor="#2196F3"
+                  />
+                </View>
+                <View style={styles.sliderLabels}>
+                  <Text style={[styles.sliderLabel, styles.sliderLabelStart]}>Poor</Text>
+                  <Text style={styles.sliderLabel}>Fair</Text>
+                  <Text style={[styles.sliderLabel, styles.sliderLabelEnd]}>Excellent</Text>
+                </View>
+              </View>
 
               {/* Image Upload */}
               <View style={styles.formField}>
@@ -1428,35 +1505,6 @@ export default function StudentView() {
                 />
               </View>
 
-              {/* Topic Proficiency */}
-              <View style={styles.formField}>
-                <Text style={styles.inputHeader}>Topic Proficiency (1-10)</Text>
-                <View style={styles.sliderContainer}>
-                  <LinearGradient
-                    colors={['#FF4B4B', '#FFB700', '#4CAF50']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.sliderTrack, { position: 'absolute', width: '100%' }]}
-                  />
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={1}
-                    maximumValue={10}
-                    step={1}
-                    value={topicProficiency}
-                    onValueChange={(value: number) => setTopicProficiency(value)}
-                    minimumTrackTintColor="transparent"
-                    maximumTrackTintColor="transparent"
-                    thumbTintColor="#2196F3"
-                  />
-                </View>
-                <View style={styles.sliderLabels}>
-                  <Text style={styles.sliderLabel}>Beginner</Text>
-                  <Text style={styles.sliderLabel}>Intermediate</Text>
-                  <Text style={styles.sliderLabel}>Advanced</Text>
-                </View>
-              </View>
-
               {/* Publish Note Button */}
             <Button
               mode="contained"
@@ -1479,6 +1527,16 @@ export default function StudentView() {
         >
           {snackbarMessage}
         </Snackbar>
+
+        {/* Add ImageModal at the end of the component, before the closing PaperProvider tag */}
+        <ImageModal
+          visible={imageModalVisible}
+          imageUrl={selectedImage || ''}
+          onClose={() => {
+            setImageModalVisible(false);
+            setSelectedImage(null);
+          }}
+        />
     </PaperProvider>
   );
 }
