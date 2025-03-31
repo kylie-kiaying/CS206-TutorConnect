@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Alert, ScrollView, useColorScheme } from "react-native";
-import Clipboard from "@react-native-clipboard/clipboard";
+import * as Clipboard from "expo-clipboard";
 import { FlatList, TouchableOpacity } from "react-native";
 import {
   TextInput,
@@ -35,6 +35,8 @@ import { getStudentCode } from "../../lib/studentCodes";
 import { supabase } from "../../lib/supabase";
 import TimePicker from "react-time-picker";
 import storage from "../../lib/storage";
+import NotificationsBell from '../../components/NotificationsBell';
+
 
 // Custom theme with better dark mode colors
 const customLightTheme = {
@@ -622,10 +624,11 @@ export default function TutorDashboard() {
 
   return (
     <PaperProvider theme={theme}>
-      <View style={styles.container}>
-        <Appbar.Header>
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Appbar.Header style={styles.header}>
           <Appbar.Content title="Tutor Dashboard" />
-          <Appbar.Action icon="logout" onPress={() => router.push('/login')} />
+          <Appbar.Action icon="logout" onPress={handleLogout} />
+          <NotificationsBell />
         </Appbar.Header>
 
         <View style={styles.segmentContainer}>

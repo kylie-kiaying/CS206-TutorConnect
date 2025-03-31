@@ -31,7 +31,9 @@ import storage from "../../lib/storage";
 import { format } from "date-fns";
 import { useRouter } from "expo-router";
 import { LineChart, BarChart } from "react-native-chart-kit";
+import NotificationsBell from '../../components/NotificationsBell';
 import ImageModal from '../../components/ImageModal';
+
 
 // Custom theme with better dark mode colors
 const customLightTheme = {
@@ -934,6 +936,7 @@ export default function ParentScreen() {
       <Appbar.Header>
         <Appbar.Content title="Parent Dashboard" />
         <Appbar.Action icon="logout" onPress={() => router.push('/login')} />
+        <NotificationsBell />
       </Appbar.Header>
       
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

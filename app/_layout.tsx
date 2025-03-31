@@ -3,6 +3,8 @@ import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useColorScheme } from "react-native";
 import { Provider as PaperProvider } from 'react-native-paper';
+import { NotificationsProvider } from '../contexts/NotificationsContext';
+import { AuthProvider } from '../contexts/AuthContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -10,65 +12,69 @@ export default function RootLayout() {
   return (
     <PaperProvider>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <Tabs
-          screenOptions={{
-            tabBarActiveTintColor: "#0a7ea4",
-            headerShown: false,
-            tabBarStyle: {
-              display: 'none',
-            },
-          }}
-        >
-          <Tabs.Screen
-            name="index"
-            options={{
-              title: "Home",
-            }}
-          />
-          <Tabs.Screen
-            name="login"
-            options={{
-              title: "Login",
-            }}
-          />
-          <Tabs.Screen
-            name="register"
-            options={{
-              title: "Register",
-            }}
-          />
-          <Tabs.Screen
-            name="tutor-login"
-            options={{
-              title: "Tutor Login",
-            }}
-          />
-          <Tabs.Screen
-            name="tutor-register"
-            options={{
-              title: "Tutor Register",
-            }}
-          />
-          <Tabs.Screen
-            name="parent/dashboard"
-            options={{
-              title: "Parent Dashboard",
-            }}
-          />
-          <Tabs.Screen
-            name="tutor/dashboard"
-            options={{
-              title: "Tutor Dashboard",
-            }}
-          />
-          <Tabs.Screen
-            name="student/[id]"
-            options={{
-              title: "Student",
-            }}
-          />
-        </Tabs>
-        <StatusBar style="auto" />
+        <AuthProvider>
+          <NotificationsProvider>
+            <Tabs
+              screenOptions={{
+                tabBarActiveTintColor: "#0a7ea4",
+                headerShown: false,
+                tabBarStyle: {
+                  display: 'none',
+                },
+              }}
+            >
+              <Tabs.Screen
+                name="index"
+                options={{
+                  title: "Home",
+                }}
+              />
+              <Tabs.Screen
+                name="login"
+                options={{
+                  title: "Login",
+                }}
+              />
+              <Tabs.Screen
+                name="register"
+                options={{
+                  title: "Register",
+                }}
+              />
+              <Tabs.Screen
+                name="tutor-login"
+                options={{
+                  title: "Tutor Login",
+                }}
+              />
+              <Tabs.Screen
+                name="tutor-register"
+                options={{
+                  title: "Tutor Register",
+                }}
+              />
+              <Tabs.Screen
+                name="parent/dashboard"
+                options={{
+                  title: "Parent Dashboard",
+                }}
+              />
+              <Tabs.Screen
+                name="tutor/dashboard"
+                options={{
+                  title: "Tutor Dashboard",
+                }}
+              />
+              <Tabs.Screen
+                name="student/[id]"
+                options={{
+                  title: "Student",
+                }}
+              />
+            </Tabs>
+            <StatusBar style="auto" />
+          </NotificationsProvider>
+        </AuthProvider>
       </ThemeProvider>
     </PaperProvider>
   );
