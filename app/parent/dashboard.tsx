@@ -1072,8 +1072,12 @@ export default function ParentScreen() {
                                     <Text style={styles.sessionDate}>
                                       {format(new Date(note.session_date), "d MMMM yyyy")}
                                     </Text>
-                                    <Text style={[styles.sessionEngagement, getEngagementStyle(note.engagement_level)]}>
-                                      {note.engagement_level}
+                                    <Text style={styles.engagementText}>
+                                      Engagement Level: <Text style={{
+                                        color: note.engagement_level === 'Highly Engaged' ? '#4CAF50' : 
+                                               note.engagement_level === 'Engaged' ? '#FFB700' : 
+                                               note.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
+                                      }}>{note.engagement_level}</Text>
                                     </Text>
                                     <Text style={styles.sessionNotes} numberOfLines={2}>
                                       {note.tutor_notes}
@@ -1608,5 +1612,10 @@ const styles = StyleSheet.create({
   },
   engagementLow: {
     color: '#FF4B4B',
+  },
+  engagementText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
   },
 });

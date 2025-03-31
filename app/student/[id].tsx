@@ -1119,12 +1119,13 @@ export default function StudentView() {
                               />
                             </TouchableOpacity>
                           )}
-        </View>
+                        </View>
 
                         <Text>
                           {studentName || 'The student'} was <Text style={{
                             color: note.engagement_level === 'Highly Engaged' ? '#4CAF50' : 
-                                   note.engagement_level === 'Engaged' ? '#FFB700' : '#FF4B4B'
+                                   note.engagement_level === 'Engaged' ? '#FFB700' : 
+                                   note.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
                           }}>{note.engagement_level.toLowerCase()}</Text> this lesson.
                         </Text>
 
