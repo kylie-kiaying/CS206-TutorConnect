@@ -27,11 +27,21 @@ export default function NotificationsBell() {
             params: { id: notification.recipient_id }
           });
           break;
+        case 'parent_feedback':
+          // Navigate to the student's session notes page
+          // The recipient_id in this case is the student_id
+          router.push({
+            pathname: '/student/[id]',
+            params: { id: notification.recipient_id }
+          });
+          break;
         case 'weekly_reminder':
           // Navigate to the tutor dashboard
           router.push('/tutor/dashboard');
           break;
         default:
+          // For any other notification type, go to dashboard
+          router.push('/tutor/dashboard');
           break;
       }
     }
@@ -43,6 +53,8 @@ export default function NotificationsBell() {
     switch (type) {
       case 'session_note':
         return 'note-text';
+      case 'parent_feedback':
+        return 'message-text';
       case 'weekly_reminder':
         return 'calendar-clock';
       default:

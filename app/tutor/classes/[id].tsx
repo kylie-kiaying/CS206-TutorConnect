@@ -500,6 +500,10 @@ export default function ClassView() {
     setSelectedExistingStudent(null);
   };
 
+  const handleBack = () => {
+    router.push('/tutor/dashboard');
+  };
+
   if (loading) {
     return (
       <PaperProvider theme={theme}>
@@ -514,7 +518,7 @@ export default function ClassView() {
     <PaperProvider theme={theme}>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Appbar.Header>
-          <Appbar.BackAction onPress={() => router.back()} />
+          <Appbar.BackAction onPress={handleBack} />
           <Appbar.Content title={classData?.name || 'Class Details'} />
         </Appbar.Header>
 

@@ -705,8 +705,18 @@ export default function StudentView() {
   }, []);
 
   const fetchSessionNotes = async () => {
-    if (id) {
+    if (!id) {
+      console.error("No student ID provided");
+      return;
+    }
+
+    try {
       const data = await getSessionNotes(id);
+      if (!data) {
+        console.error("No session notes found for student:", id);
+        return;
+      }
+      
       setSessionNotes(data);
       
       // Fetch all topics referenced in session notes
@@ -739,6 +749,10 @@ export default function StudentView() {
           console.error('Error fetching topics for notes:', error);
         }
       }
+    } catch (error) {
+      console.error("Error fetching session notes:", error);
+      setSnackbarMessage("Error loading session notes");
+      setSnackbarVisible(true);
     }
   };
 

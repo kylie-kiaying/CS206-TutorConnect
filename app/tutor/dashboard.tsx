@@ -193,15 +193,29 @@ export default function TutorDashboard() {
     try {
       if (!user) return;
 
-      // Fetch classes with student count
+      // Fetch classes with accurate student count
       const { data, error } = await supabase
         .from('classes')
-        .select('*, class_students(count)')
+        .select(`
+          *,
+          class_students!inner (
+            count
+          )
+        `)
         .eq('tutor_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setClasses(data || []);
+
+      // Transform the data to match the expected format
+      const transformedData = (data || []).map(classItem => ({
+        ...classItem,
+        class_students: [{
+          count: classItem.class_students?.[0]?.count || 0
+        }]
+      }));
+
+      setClasses(transformedData);
     } catch (error) {
       console.error('Error fetching classes:', error);
     } finally {
@@ -318,11 +332,23 @@ export default function TutorDashboard() {
   };
 
   const handleMoreInfo = async (studentId: string) => {
-    const code = await getStudentCode(studentId);
-    if (code) {
-      setStudentCode(code);
-      setStudentCodePopupVisible(true);
-    } else {
+    try {
+      const { data, error } = await supabase
+        .from('student_codes')
+        .select('code')
+        .eq('student_id', studentId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setStudentCode(data.code);
+        setStudentCodePopupVisible(true);
+      } else {
+        Alert.alert("Error", "No student code found. Please contact support.");
+      }
+    } catch (error) {
+      console.error("Error fetching student code:", error);
       Alert.alert("Error", "Could not retrieve student code.");
     }
     setMenuVisible(null);
@@ -585,27 +611,62 @@ export default function TutorDashboard() {
     <View style={{ flex: 1 }}>
       <ScrollView style={styles.list}>
         {students.map((student) => (
-          <TouchableOpacity
-            key={student.id}
-            onPress={() => router.push(`/student/${student.id}`)}
-          >
-            <View style={styles.studentCard}>
-              <View style={[styles.cardContent, { padding: 16 }]}>
-                <View style={styles.cardTextContent}>
-                  <Text style={styles.studentName}>{student.name}</Text>
-                  <Text style={styles.studentClasses}>
-                    {student.classes.map(c => c.class.name).join(', ')}
-                  </Text>
-                </View>
+          <View key={student.id} style={styles.studentCard}>
+            <TouchableOpacity
+              style={styles.cardContent}
+              onPress={() => router.push(`/student/${student.id}`)}
+            >
+              <View style={styles.cardTextContent}>
+                <Text style={styles.studentName}>{student.name}</Text>
+                <Text style={styles.studentClasses}>
+                  {student.classes.map(c => c.class.name).join(', ')}
+                </Text>
+              </View>
+              <View style={styles.cardActions}>
+                <IconButton
+                  icon="key"
+                  size={20}
+                  onPress={() => handleMoreInfo(student.id)}
+                  style={styles.actionButton}
+                />
+                <Menu
+                  visible={menuVisible === student.id}
+                  onDismiss={() => setMenuVisible(null)}
+                  anchor={
+                    <IconButton
+                      icon="dots-vertical"
+                      size={20}
+                      onPress={() => setMenuVisible(student.id)}
+                      style={styles.actionButton}
+                    />
+                  }
+                >
+                  <Menu.Item 
+                    onPress={() => {
+                      openEditStudentModal(student);
+                      setMenuVisible(null);
+                    }} 
+                    title="Edit Student" 
+                    leadingIcon="pencil"
+                  />
+                  <Menu.Item 
+                    onPress={() => {
+                      handleDeleteStudent(student.id);
+                      setMenuVisible(null);
+                    }} 
+                    title="Delete Student" 
+                    leadingIcon="delete"
+                  />
+                </Menu>
                 <IconButton
                   icon="chevron-right"
-                  size={24}
+                  size={20}
                   iconColor="#000000"
-                  style={styles.chevronIcon}
+                  style={styles.actionButton}
                 />
               </View>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
         ))}
       </ScrollView>
       
@@ -887,19 +948,29 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   studentCard: {
-    marginBottom: 16,
+    marginBottom: 8,
     borderRadius: 12,
     backgroundColor: '#E3F2FD',
     elevation: 0,
   },
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  cardTextContent: {
+    flex: 1,
+    marginRight: 8,
+  },
   studentName: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
     color: '#000000',
   },
   studentClasses: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#000000',
     opacity: 0.7,
   },
@@ -946,16 +1017,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cardTextContent: {
-    flex: 1,
-  },
   chevronIcon: {
     margin: 0,
     opacity: 0.5,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    margin: 0,
+    padding: 0,
   },
 });
