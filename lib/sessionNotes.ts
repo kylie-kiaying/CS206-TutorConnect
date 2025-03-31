@@ -33,17 +33,54 @@ export type SessionNote = {
 
 // Fetch session notes for a student
 export const getSessionNotes = async (student_id: string): Promise<SessionNote[]> => {
-  const { data, error } = await supabase
-    .from("session_notes")
-    .select("*")
-    .eq("student_id", student_id)
-    .order("session_date", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching session notes:", error);
+  if (!student_id) {
+    console.error("No student ID provided to getSessionNotes");
     return [];
   }
-  return data;
+
+  try {
+    const { data, error } = await supabase
+      .from("session_notes")
+      .select(`
+        *,
+        class:classes (
+          id,
+          name,
+          subject
+        ),
+        topic:topics (
+          id,
+          name
+        )
+      `)
+      .eq("student_id", student_id)
+      .order("session_date", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching session notes:", error);
+      throw error;
+    }
+
+    if (!data) {
+      console.log("No session notes found for student:", student_id);
+      return [];
+    }
+
+    // Transform the data to match the expected format
+    const transformedNotes = (data || []).map(note => ({
+      ...note,
+      subject: note.class?.subject || note.class?.name || 'Unknown Class',
+      topic: note.topic?.name || note.topic || 'Untitled Topic',
+      class_id: note.class?.id || null,
+      topic_id: note.topic?.id || null
+    }));
+
+    console.log(`Found ${transformedNotes.length} session notes for student ${student_id}`);
+    return transformedNotes;
+  } catch (error) {
+    console.error("Error in getSessionNotes:", error);
+    return [];
+  }
 };
 
 // Add a new session note
