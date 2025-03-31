@@ -41,11 +41,11 @@ const customLightTheme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
-    background: '#f5f5f5',
-    surface: '#ffffff',
+    background: '#FFFFFF',
+    surface: '#FFFFFF',
     text: '#000000',
     primary: '#2196F3',
-    surfaceVariant: '#ffffff',
+    surfaceVariant: '#FFFFFF',
     secondaryContainer: '#e3f2fd',
   }
 };
@@ -528,185 +528,135 @@ export default function TutorDashboard() {
     );
   }
 
-  const renderClassesTab = () => (
-    <>
-      <ScrollView style={styles.list}>
-        {classes.length === 0 ? (
-          <Card style={[styles.emptyCard, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              <Text style={[styles.emptyText, { color: theme.colors.text }]}>
-                You haven't created any classes yet.
-              </Text>
-              <Text style={[styles.emptySubtext, { color: theme.colors.text + 'aa' }]}>
-                Create a class to start managing your students and curriculum.
-              </Text>
-            </Card.Content>
-          </Card>
-        ) : (
-          classes.map((classItem) => (
-            <Card
+  const renderClassesTab = () => {
+    const generatePastelColor = (name: string) => {
+      const hue = Math.abs(name.split('').reduce((acc, char) => char.charCodeAt(0) + acc, 0)) % 360;
+      return `hsl(${hue}, 85%, 93%)`;
+    };
+
+    return (
+      <View style={{ flex: 1 }}>
+        <ScrollView style={styles.list}>
+          {classes.map((classItem) => (
+            <TouchableOpacity
               key={classItem.id}
-              style={[styles.card, { backgroundColor: theme.colors.surface }]}
               onPress={() => router.push({
                 pathname: '/tutor/classes/[id]' as any,
                 params: { id: classItem.id }
               })}
             >
-              <Card.Content>
-                <Text style={[styles.className, { color: theme.colors.text }]}>
-                  {classItem.name}
-                </Text>
-                <Text style={[styles.subject, { color: theme.colors.primary }]}>
-                  {classItem.subject}
-                </Text>
-                {classItem.description && (
-                  <Text style={[styles.descriptionText, { color: theme.colors.text + 'cc' }]}>
-                    {classItem.description}
-                  </Text>
-                )}
-                <Text style={[styles.studentCountText, { backgroundColor: theme.colors.secondaryContainer }]}>
-                  {classItem.class_students[0]?.count || 0} student{(classItem.class_students[0]?.count || 0) === 1 ? '' : 's'}
-                </Text>
-              </Card.Content>
-            </Card>
-          ))
-        )}
-      </ScrollView>
-
-      <PaperButton
-        mode="contained"
-        onPress={() => setCreateClassModalVisible(true)}
-        style={styles.floatingAddButton}
-      >
-        Create Class
-      </PaperButton>
-    </>
-  );
+              <View style={[styles.classCard, { backgroundColor: generatePastelColor(classItem.name) }]}>
+                <View style={styles.cardContent}>
+                  <View style={styles.cardTextContent}>
+                    <Text style={styles.className}>{classItem.name}</Text>
+                    <Text style={styles.enrollmentText}>
+                      {classItem.class_students[0]?.count || 0} student{(classItem.class_students[0]?.count || 0) === 1 ? '' : 's'} enrolled
+                    </Text>
+                  </View>
+                  <IconButton
+                    icon="chevron-right"
+                    size={24}
+                    iconColor="#000000"
+                    style={styles.chevronIcon}
+                  />
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        
+        <TouchableOpacity 
+          style={styles.floatingActionButton}
+          onPress={() => setCreateClassModalVisible(true)}
+        >
+          <IconButton 
+            icon="calendar-plus"
+            size={28}
+            iconColor="#FFFFFF"
+          />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const renderStudentsTab = () => (
-    <>
-      <FlatList
-        style={styles.list}
-        data={students}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Content>
-              {editingStudent === item.id ? (
-                <TextInput
-                  value={newName}
-                  onChangeText={setNewName}
-                  style={styles.editInput}
-                  theme={theme}
+    <View style={{ flex: 1 }}>
+      <ScrollView style={styles.list}>
+        {students.map((student) => (
+          <TouchableOpacity
+            key={student.id}
+            onPress={() => router.push(`/student/${student.id}`)}
+          >
+            <View style={styles.studentCard}>
+              <View style={[styles.cardContent, { padding: 16 }]}>
+                <View style={styles.cardTextContent}>
+                  <Text style={styles.studentName}>{student.name}</Text>
+                  <Text style={styles.studentClasses}>
+                    {student.classes.map(c => c.class.name).join(', ')}
+                  </Text>
+                </View>
+                <IconButton
+                  icon="chevron-right"
+                  size={24}
+                  iconColor="#000000"
+                  style={styles.chevronIcon}
                 />
-              ) : (
-                <View style={styles.cardHeader}>
-                  <Text style={[styles.name, { color: theme.colors.text }]}>{item.name}</Text>
-                  <Text style={[styles.totalSubjects, { backgroundColor: theme.colors.secondaryContainer }]}>
-                    {item.classes.length}{" "}
-                    {item.classes.length === 1 ? "Class" : "Classes"}
-                  </Text>
-                </View>
-              )}
-
-              {item.classes.length > 0 ? (
-                <View style={styles.classesContainer}>
-                  <Text style={[styles.classHeader, { color: theme.colors.text + 'cc' }]}>Enrolled Classes:</Text>
-                  {item.classes.map((studentClass) => (
-                    <TouchableOpacity
-                      key={studentClass.class_id}
-                      style={[styles.classItem, { backgroundColor: theme.colors.surfaceVariant }]}
-                      onPress={() => 
-                        router.push({
-                          pathname: '/tutor/classes/[id]' as any,
-                          params: { id: studentClass.class_id }
-                        })
-                      }
-                    >
-                      <View style={styles.classInfo}>
-                        <Text style={[styles.subject, { color: theme.colors.primary }]}>{studentClass.class.name}</Text>
-                        <Text style={[styles.classSubject, { color: theme.colors.text + 'cc' }]}>
-                          Subject: {studentClass.class.subject}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.noClassesContainer}>
-                  <Text style={[styles.noClassesText, { color: theme.colors.text + '88' }]}>
-                    Not enrolled in any classes
-                  </Text>
-                </View>
-              )}
-            </Card.Content>
-            <Card.Actions>
-              {editingStudent === item.id ? (
-                <PaperButton onPress={() => handleEditStudent(item.id)}>
-                  Save
-                </PaperButton>
-              ) : (
-                <>
-                  <PaperButton
-                    onPress={() => router.push(`/student/${item.id}`)}
-                  >
-                    Session Notes
-                  </PaperButton>
-                  <Menu
-                    visible={menuVisible === item.id}
-                    onDismiss={() => setMenuVisible(null)}
-                    anchor={
-                      <IconButton
-                        icon="dots-vertical"
-                        onPress={() => setMenuVisible(item.id)}
-                      />
-                    }
-                  >
-                    <Menu.Item
-                      onPress={() => {
-                        openEditStudentModal(item);
-                      }}
-                      title="Edit"
-                      leadingIcon="pencil"
-                    />
-                    <Menu.Item
-                      onPress={() => handleDeleteStudent(item.id)}
-                      title="Delete Student"
-                      leadingIcon="delete"
-                    />
-                    <Menu.Item
-                      onPress={() => handleMoreInfo(item.id)}
-                      title="Get Student Code"
-                      leadingIcon="key"
-                    />
-                  </Menu>
-                </>
-              )}
-            </Card.Actions>
-          </Card>
-        )}
-      />
-    </>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      
+      <TouchableOpacity 
+        style={styles.floatingActionButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <IconButton 
+          icon="account-plus"
+          size={28}
+          iconColor="#FFFFFF"
+        />
+      </TouchableOpacity>
+    </View>
   );
 
   return (
     <PaperProvider theme={theme}>
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.container}>
         <Appbar.Header>
-          <Appbar.Content title="Dashboard" />
-          <Appbar.Action icon="logout" onPress={handleLogout} />
+          <Appbar.Content title="Tutor Dashboard" />
+          <Appbar.Action icon="logout" onPress={() => router.push('/login')} />
         </Appbar.Header>
 
-        <View style={[styles.tabContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
-          <SegmentedButtons
-            value={activeTab}
-            onValueChange={setActiveTab}
-            buttons={[
-              { value: 'classes', label: 'Classes' },
-              { value: 'students', label: 'Students' },
+        <View style={styles.segmentContainer}>
+          <TouchableOpacity 
+            style={[
+              styles.segmentButton,
+              activeTab === 'classes' ? styles.segmentButtonActive : styles.segmentButtonInactive
             ]}
-            style={styles.tabs}
-          />
+            onPress={() => setActiveTab('classes')}
+          >
+            <Text style={[
+              styles.segmentText,
+              activeTab === 'classes' ? styles.segmentTextActive : styles.segmentTextInactive
+            ]}>
+              Classes
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[
+              styles.segmentButton,
+              activeTab === 'students' ? styles.segmentButtonActive : styles.segmentButtonInactive
+            ]}
+            onPress={() => setActiveTab('students')}
+          >
+            <Text style={[
+              styles.segmentText,
+              activeTab === 'students' ? styles.segmentTextActive : styles.segmentTextInactive
+            ]}>
+              Students
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {activeTab === 'classes' ? renderClassesTab() : renderStudentsTab()}
@@ -858,12 +808,21 @@ export default function TutorDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 16,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '600',
+    color: '#000000',
   },
   list: {
     flex: 1,
@@ -871,62 +830,75 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  name: {
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  totalSubjects: {
-    fontSize: 14,
-    color: "#666",
-    backgroundColor: "#e1f5fe",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
     borderRadius: 12,
+    elevation: 0,
+    borderWidth: 0,
   },
-  classesContainer: {
-    marginTop: 8,
-  },
-  classHeader: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginBottom: 8,
-    color: "#666",
-  },
-  classItem: {
-    marginBottom: 8,
-    backgroundColor: "#f0f4f8",
-    borderRadius: 8,
-    padding: 12,
-  },
-  classInfo: {
-    flexDirection: "column",
-  },
-  subject: {
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  classSubject: {
-    fontSize: 14,
-    color: "#555",
-    marginTop: 4,
-  },
-  noClassesContainer: {
-    padding: 16,
-    alignItems: "center",
-  },
-  noClassesText: {
-    color: "#888",
-    fontStyle: "italic",
-  },
-  editInput: {
+  segmentContainer: {
+    flexDirection: 'row',
+    padding: 8,
     marginBottom: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    marginHorizontal: 4,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#2196F3',
+  },
+  segmentButtonInactive: {
+    backgroundColor: '#F0F0F0',
+  },
+  segmentText: {
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  segmentTextActive: {
+    color: '#FFFFFF',
+  },
+  segmentTextInactive: {
+    color: '#000000',
+  },
+  classCard: {
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 0,
+    padding: 20,
+  },
+  className: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#000000',
+  },
+  enrollmentText: {
+    fontSize: 14,
+    color: '#000000',
+    opacity: 0.7,
+  },
+  studentCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: '#E3F2FD',
+    elevation: 0,
+  },
+  studentName: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 4,
+    color: '#000000',
+  },
+  studentClasses: {
+    fontSize: 14,
+    color: '#000000',
+    opacity: 0.7,
   },
   modalContainer: {
     backgroundColor: "white",
@@ -955,52 +927,32 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#1976d2",
   },
-  floatingAddButton: {
-    position: "absolute",
-    bottom: 16,
+  floatingActionButton: {
+    position: 'absolute',
     right: 16,
-    borderRadius: 28,
+    bottom: 16,
+    backgroundColor: '#2196F3',
+    borderRadius: 30,
+    width: 60,
+    height: 60,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  emptyCard: {
-    margin: 16,
-    padding: 8,
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 8,
+  cardTextContent: {
+    flex: 1,
   },
-  emptySubtext: {
-    fontSize: 14,
-    textAlign: "center",
-    color: "#666",
-  },
-  tabContainer: {
-    padding: 16,
-    paddingBottom: 8,
-  },
-  tabs: {
-    marginBottom: 8,
-  },
-  className: {
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  descriptionText: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  studentCountText: {
-    fontSize: 14,
-    color: "#607d8b",
-    backgroundColor: "#e1f5fe",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    alignSelf: "flex-start",
-    marginTop: 8,
+  chevronIcon: {
+    margin: 0,
+    opacity: 0.5,
   },
 });
