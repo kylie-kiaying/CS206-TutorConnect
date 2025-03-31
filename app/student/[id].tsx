@@ -488,7 +488,7 @@ export default function StudentView() {
                 )}
               </View>
 
-              {/* TOPIC SELECTION */}
+              {/* TOPIC SELECTION (Optional) */}
               {selectedClass && (
                 <View style={styles.formField}>
                   <Title style={styles.fieldLabel}>Topic (Optional)</Title>
@@ -529,7 +529,7 @@ export default function StudentView() {
                 />
               </View>
 
-              {/* LESSON SUMMARY */}
+              {/* LESSON SUMMARY INPUT */}
               <TextInput
                 label="Lesson Summary"
                 value={lessonSummary}
@@ -538,13 +538,56 @@ export default function StudentView() {
                 multiline
               />
 
-              {/* ENGAGEMENT LEVEL */}
+              {/* HOMEWORK INPUT */}
+              <TextInput
+                label="Homework Assigned"
+                value={homeworkAssigned}
+                onChangeText={setHomeworkAssigned}
+                style={styles.input}
+                multiline
+              />
+
+              {homeworkAssigned && (
+                <Surface style={styles.completionSection}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setShowCompletionRate(!showCompletionRate)}
+                    style={styles.completionButton}
+                  >
+                    {showCompletionRate ? 'Hide Assignment Completion' : 'Add Assignment Completion'}
+                  </Button>
+                  
+                  {showCompletionRate && (
+                    <View style={styles.completionContainer}>
+                      <TextInput
+                        label="Assignment Completion (%)"
+                        value={assignmentCompletion}
+                        onChangeText={(text) => {
+                          const numericValue = text.replace(/[^0-9]/g, '');
+                          if (numericValue === '' || parseInt(numericValue, 10) <= 100) {
+                            setAssignmentCompletion(numericValue);
+                          }
+                        }}
+                        keyboardType="numeric"
+                        style={styles.completionInput}
+                        placeholder="Enter completion rate (0-100)"
+                        maxLength={3}
+                      />
+                      <Paragraph style={styles.completionHelper}>
+                        Enter a value between 0 and 100
+                      </Paragraph>
+                    </View>
+                  )}
+                </Surface>
+              )}
+
+              {/* ENGAGEMENT LEVEL DROPDOWN */}
               <View style={styles.pickerContainer}>
                 <Title style={styles.fieldLabel}>Engagement Level</Title>
                 <RNPickerSelect
-                  onValueChange={(value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted") => 
-                    setEngagementLevel(value)
-                  }
+                  onValueChange={(
+                    value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted"
+                  ) => setEngagementLevel(value)}
                   items={[
                     { label: "Highly Engaged", value: "Highly Engaged" },
                     { label: "Engaged", value: "Engaged" },
@@ -558,7 +601,7 @@ export default function StudentView() {
                 />
               </View>
 
-              {/* UNDERSTANDING LEVEL */}
+              {/* UNDERSTANDING LEVEL DROPDOWN */}
               <View style={styles.pickerContainer}>
                 <Title style={styles.fieldLabel}>Understanding Level</Title>
                 <RNPickerSelect
@@ -578,14 +621,6 @@ export default function StudentView() {
                 />
               </View>
 
-              {/* HOMEWORK */}
-              <TextInput
-                label="Homework Assigned"
-                value={homeworkAssigned}
-                onChangeText={setHomeworkAssigned}
-                style={styles.input}
-              />
-
               {/* TUTOR NOTES */}
               <TextInput
                 label="Tutor Notes"
@@ -595,42 +630,7 @@ export default function StudentView() {
                 multiline
               />
 
-              {/* ASSIGNMENT COMPLETION - Moved to end */}
-              {homeworkAssigned && (
-                <View style={styles.completionSection}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => setShowCompletionRate(!showCompletionRate)}
-                    style={styles.completionButton}
-                  >
-                    {showCompletionRate ? 'Hide Completion Rate' : 'Add Completion Rate'}
-                  </Button>
-                  
-                  {showCompletionRate && (
-                    <View style={styles.completionContainer}>
-                      <TextInput
-                        label="Completion Rate (%)"
-                        value={assignmentCompletion}
-                        onChangeText={(text) => {
-                          const numericValue = text.replace(/[^0-9]/g, '');
-                          if (numericValue === '' || parseInt(numericValue, 10) <= 100) {
-                            setAssignmentCompletion(numericValue);
-                          }
-                        }}
-                        keyboardType="numeric"
-                        style={styles.completionInput}
-                        placeholder="Enter completion rate (0-100)"
-                        maxLength={3}
-                      />
-                      <Paragraph style={styles.completionHelper}>
-                        Enter a value between 0 and 100
-                      </Paragraph>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* BUTTONS */}
+              {/* ADD/UPDATE BUTTON */}
               <Button
                 mode="contained"
                 onPress={handleAddOrUpdateSessionNote}
@@ -640,6 +640,7 @@ export default function StudentView() {
                 {editingNote ? "Update Note" : "Add Note"}
               </Button>
 
+              {/* CLOSE MODAL BUTTON */}
               <Button
                 onPress={() => {
                   setModalVisible(false);
