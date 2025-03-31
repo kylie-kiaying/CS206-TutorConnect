@@ -4,15 +4,30 @@ export type SessionNote = {
   id: string;
   student_id: string;
   session_date: string;
+  date?: string; // alias for session_date for compatibility
   subject?: string;
   topic?: string;
   class_id?: string | null;
   topic_id?: string | null;
   lesson_summary: string;
   homework_assigned: string;
+  homework?: string; // alias for homework_assigned for compatibility
   engagement_level: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted";
+  understanding_level: "Excellent" | "Good" | "Fair" | "Needs Improvement";
   tutor_notes: string;
+  notes?: string; // alias for tutor_notes for compatibility
   parent_feedback: string;
+  assignment_completion?: number;
+  duration?: number;
+  status?: 'completed' | 'scheduled' | 'cancelled';
+  objectives?: string[];
+  nextSession?: string;
+  topic_proficiency?: number; // Score from 1-10
+  file_url?: string;
+  tutor?: {
+    name: string;
+    subject: string;
+  };
 };
 
 // Fetch session notes for a student

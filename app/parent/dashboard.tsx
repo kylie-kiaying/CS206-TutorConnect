@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ScrollView, StyleSheet, View, FlatList, useColorScheme, Dimensions } from "react-native";
+import { ScrollView, StyleSheet, View, FlatList, useColorScheme, Dimensions, TouchableOpacity, Image } from "react-native";
 import {
   TextInput,
   Button,
@@ -20,6 +20,7 @@ import {
   Surface,
   Text,
   Chip,
+  Icon,
 } from "react-native-paper";
 import {
   getSessionNotesByCode,
@@ -58,21 +59,33 @@ const customDarkTheme = {
   }
 };
 
-type SessionNote = {
+export type SessionNote = {
   id: string;
   student_id: string;
   session_date: string;
+  date: string; // alias for session_date for compatibility
   subject: string;
   topic: string;
   lesson_summary: string;
   homework_assigned: string;
+  homework?: string; // alias for homework_assigned for compatibility
   engagement_level: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted";
   understanding_level: "Excellent" | "Good" | "Fair" | "Needs Improvement";
   tutor_notes: string;
+  notes?: string; // alias for tutor_notes for compatibility
   parent_feedback: string;
   class_id?: string;
   topic_id?: string;
   assignment_completion?: number;
+  duration: number;
+  status: 'completed' | 'scheduled' | 'cancelled';
+  objectives: string[];
+  nextSession?: string;
+  file_url?: string;
+  tutor: {
+    name: string;
+    subject: string;
+  };
 };
 
 type Student = {
@@ -81,7 +94,7 @@ type Student = {
   code?: string;
 };
 
-type AnalyticsData = {
+export type AnalyticsData = {
   dates: string[];
   engagement: number[];
   understanding: number[];
@@ -89,6 +102,14 @@ type AnalyticsData = {
     dates: string[];
     engagement: number[];
     understanding: number[];
+  }>;
+  totalHours: number;
+  averageScore: number;
+  improvementRate: number;
+  attendanceRate: number;
+  recentActivity: Array<{
+    date: string;
+    description: string;
   }>;
 };
 
@@ -127,7 +148,7 @@ export default function ParentScreen() {
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [currentNote, setCurrentNote] = useState<SessionNote | null>(null);
   const [parentFeedback, setParentFeedback] = useState("");
-  
+
   // Notification states
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -142,6 +163,11 @@ export default function ParentScreen() {
     engagement: [],
     understanding: [],
     subjects: {},
+    totalHours: 0,
+    averageScore: 0,
+    improvementRate: 0,
+    attendanceRate: 0,
+    recentActivity: [],
   });
 
   // Add this to your state declarations
@@ -150,6 +176,9 @@ export default function ParentScreen() {
   // Add these state declarations
   const [selectedNote, setSelectedNote] = useState<SessionNote | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+
+  // Add state for collapsed months
+  const [collapsedMonths, setCollapsedMonths] = useState<Record<string, boolean>>({});
 
   // Create theme-dependent styles inside the component
   const themedStyles = {
@@ -225,27 +254,53 @@ export default function ParentScreen() {
     try {
       const notes = await getSessionNotesByCode(await getStudentCode(studentId));
 
-      if (notes) {
+    if (notes) {
+        // Get all unique class IDs
         const classIds = [...new Set(notes
           .filter(note => note.class_id)
           .map(note => note.class_id))];
 
+        // Get all unique topic IDs
+        const topicIds = [...new Set(notes
+          .filter(note => note.topic_id)
+          .map(note => note.topic_id))];
+
         if (classIds.length > 0) {
-          const { data: classes, error } = await supabase
+          // Fetch all classes
+          const { data: classes, error: classError } = await supabase
             .from('classes')
             .select('id, name, subject')
-            .eq('id', classIds[0]);
+            .in('id', classIds);
 
-          if (error) {
-            console.error('Error fetching classes:', error);
-          } else if (classes && classes.length > 0) {
+          if (classError) {
+            console.error('Error fetching classes:', classError);
+          }
+
+          // Fetch all topics
+          const { data: topics, error: topicError } = await supabase
+            .from('topics')
+            .select('id, name, class_id')
+            .in('id', topicIds);
+
+          if (topicError) {
+            console.error('Error fetching topics:', topicError);
+          }
+
+          if (classes && classes.length > 0) {
             setAvailableClasses(classes);
             
+            if (topics && topics.length > 0) {
+              setAvailableTopics(topics);
+            }
+
             const notesWithSubjects = notes.map(note => {
               const classInfo = classes.find(c => c.id === note.class_id);
+              const topicInfo = topics?.find(t => t.id === note.topic_id);
+              
               return {
                 ...note,
-                subject: classInfo?.subject || classInfo?.name || 'Unknown Class'
+                subject: classInfo?.subject || classInfo?.name || 'Unknown Class',
+                topic: topicInfo?.name || note.topic || 'Untitled Topic'
               };
             });
 
@@ -260,13 +315,18 @@ export default function ParentScreen() {
             processAnalyticsData(notesWithSubjects);
           }
         }
-      } else {
+    } else {
         setSessionNotes([]);
         setAnalyticsData({
           dates: [],
           engagement: [],
           understanding: [],
-          subjects: {}
+          subjects: {},
+          totalHours: 0,
+          averageScore: 0,
+          improvementRate: 0,
+          attendanceRate: 0,
+          recentActivity: [],
         });
       }
     } catch (error) {
@@ -361,7 +421,7 @@ export default function ParentScreen() {
     } catch (error) {
       console.error("Error adding student:", error);
       setSnackbarMessage("Error adding student. Please try again.");
-      setSnackbarVisible(true);
+    setSnackbarVisible(true);
     } finally {
       setAddingStudent(false);
     }
@@ -376,19 +436,19 @@ export default function ParentScreen() {
   const handleSaveFeedback = async () => {
     if (currentNote && selectedStudent) {
       try {
-        await updateSessionNote({
-          ...currentNote,
-          parent_feedback: parentFeedback,
-          student_id: currentNote.student_id,
-          engagement_level: currentNote.engagement_level as
-            | "Highly Engaged"
-            | "Engaged"
-            | "Neutral"
-            | "Distracted",
-        });
+      await updateSessionNote({
+        ...currentNote,
+        parent_feedback: parentFeedback,
+        student_id: currentNote.student_id,
+        engagement_level: currentNote.engagement_level as
+          | "Highly Engaged"
+          | "Engaged"
+          | "Neutral"
+          | "Distracted",
+      });
         
         setFeedbackModalVisible(false);
-        setSnackbarMessage("Feedback updated successfully!");
+      setSnackbarMessage("Feedback updated successfully!");
         setSnackbarVisible(true);
         
         // Refresh notes
@@ -426,6 +486,11 @@ export default function ParentScreen() {
       engagement: [],
       understanding: [],
       subjects: {},
+      totalHours: 0,
+      averageScore: 0,
+      improvementRate: 0,
+      attendanceRate: 0,
+      recentActivity: [],
     };
 
     sortedNotes.forEach(note => {
@@ -454,10 +519,93 @@ export default function ParentScreen() {
     setAnalyticsData(data);
   };
 
+  // Update the getSubjectColor function to return darker colors
+  const getSubjectColor = (subject: string, isPastel: boolean = false): string => {
+    // Generate a consistent color based on the subject name
+    const hash = subject.split('').reduce((acc, char) => {
+      return char.charCodeAt(0) + ((acc << 5) - acc);
+    }, 0);
+    const h = Math.abs(hash) % 360;
+    
+    // Return either pastel or darker color based on the flag
+    return isPastel 
+      ? `hsl(${h}, 70%, 90%)`  // Pastel for chips
+      : `hsl(${h}, 70%, 45%)`; // Darker for charts
+  };
+
+  const getScoreColor = (score: number): string => {
+    if (score >= 3.5) return '#4CAF50'; // Green
+    if (score >= 2.5) return '#2196F3'; // Blue
+    if (score >= 1.5) return '#FFB700'; // Yellow
+    return '#FF4B4B'; // Red
+  };
+
   // Update the AnalyticsView component
   const AnalyticsView = ({ data }: { data: AnalyticsData }) => {
     const screenWidth = Dimensions.get('window').width;
     const [selectedSubject, setSelectedSubject] = useState<string>('all');
+
+    // Get the data for the selected subject or all subjects
+    const getFilteredData = () => {
+      if (selectedSubject === 'all') {
+        return {
+          dates: data.dates,
+          engagement: data.engagement,
+          understanding: data.understanding
+        };
+      }
+      return {
+        dates: data.subjects[selectedSubject]?.dates || [],
+        engagement: data.subjects[selectedSubject]?.engagement || [],
+        understanding: data.subjects[selectedSubject]?.understanding || []
+      };
+    };
+
+    const filteredData = getFilteredData();
+
+    // Calculate averages based on filtered data
+    const getAverages = () => {
+      const engagementAvg = filteredData.engagement.length > 0
+        ? (filteredData.engagement.reduce((a, b) => a + b, 0) / filteredData.engagement.length)
+        : 0;
+      
+      const understandingAvg = filteredData.understanding.length > 0
+        ? (filteredData.understanding.reduce((a, b) => a + b, 0) / filteredData.understanding.length)
+        : 0;
+
+      return {
+        engagement: engagementAvg.toFixed(1),
+        understanding: understandingAvg.toFixed(1)
+      };
+    };
+
+    const averages = getAverages();
+
+    // Update chart configuration
+    const chartConfig = {
+      backgroundColor: 'transparent',
+      backgroundGradientFrom: theme.colors.surface,
+      backgroundGradientTo: theme.colors.surface,
+      decimalPlaces: 0,
+      color: (opacity = 1) => selectedSubject === 'all' 
+        ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
+        : getSubjectColor(selectedSubject),
+      labelColor: (opacity = 1) => theme.colors.text,
+      strokeWidth: 2,
+      propsForBackgroundLines: {
+        strokeWidth: 1,
+        stroke: theme.colors.text,
+        strokeOpacity: 0.1,
+      },
+      propsForLabels: {
+        fontSize: 10,
+      },
+      formatYLabel: (yLabel: string) => {
+        const value = parseInt(yLabel, 10);
+        const labels = ['', 'Low', '', 'Med', '', 'High'];
+        return labels[value] || '';
+      }
+    };
 
     return (
       <View style={styles.analyticsContainer}>
@@ -474,51 +622,75 @@ export default function ParentScreen() {
             <Chip
               selected={selectedSubject === 'all'}
               onPress={() => setSelectedSubject('all')}
-              style={styles.subjectChip}
+              style={[
+                styles.subjectChip,
+                { backgroundColor: '#F5F5F5' },
+                selectedSubject === 'all' && styles.subjectChipSelected
+              ]}
             >
-              All Subjects
+              <Text style={styles.subjectChipText}>All Subjects</Text>
             </Chip>
             {Object.keys(data.subjects).map(subject => (
               <Chip
                 key={subject}
                 selected={selectedSubject === subject}
                 onPress={() => setSelectedSubject(subject)}
-                style={styles.subjectChip}
+                style={[
+                  styles.subjectChip,
+                  { backgroundColor: getSubjectColor(subject, true) },
+                  selectedSubject === subject && [
+                    styles.subjectChipSelected,
+                    { borderColor: getSubjectColor(subject, false) }
+                  ]
+                ]}
               >
-                {subject}
+                <Text style={styles.subjectChipText}>{subject}</Text>
               </Chip>
             ))}
           </ScrollView>
 
           {/* Analytics Cards */}
           <Surface style={styles.statsCard}>
-            <Title style={styles.statsTitle}>Performance Overview</Title>
+            <Title style={styles.statsTitle}>
+              {selectedSubject === 'all' ? 'Overall Performance' : `${selectedSubject} Performance`}
+            </Title>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Average Engagement</Text>
-                <Text style={styles.statValue}>
-                  {(data.engagement.reduce((a, b) => a + b, 0) / data.engagement.length).toFixed(1)}
+                <Text style={[
+                  styles.statValue,
+                  { color: getScoreColor(parseFloat(averages.engagement)) }
+                ]}>
+                  {averages.engagement}
                 </Text>
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Average Understanding</Text>
-                <Text style={styles.statValue}>
-                  {(data.understanding.reduce((a, b) => a + b, 0) / data.understanding.length).toFixed(1)}
+                <Text style={[
+                  styles.statValue,
+                  { color: getScoreColor(parseFloat(averages.understanding)) }
+                ]}>
+                  {averages.understanding}
                 </Text>
               </View>
             </View>
           </Surface>
 
           {/* Engagement Chart */}
-          <Surface style={styles.chartCard}>
+          <Surface style={[
+            styles.chartCard,
+            { borderLeftColor: selectedSubject === 'all' ? theme.colors.primary : getSubjectColor(selectedSubject) }
+          ]}>
             <Title style={styles.chartTitle}>Student Engagement</Title>
             <View style={styles.chartWrapper}>
               <LineChart
                 data={{
-                  labels: data.dates,
+                  labels: filteredData.dates,
                   datasets: [{ 
-                    data: data.engagement,
-                    color: (opacity = 1) => theme.colors.primary,
+                    data: filteredData.engagement,
+                    color: (opacity = 1) => selectedSubject === 'all' 
+                      ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
+                      : getSubjectColor(selectedSubject),
                     strokeWidth: 2,
                   }],
                 }}
@@ -529,7 +701,9 @@ export default function ParentScreen() {
                   backgroundGradientFrom: theme.colors.surface,
                   backgroundGradientTo: theme.colors.surface,
                   decimalPlaces: 0,
-                  color: (opacity = 1) => theme.colors.primary,
+                  color: (opacity = 1) => selectedSubject === 'all' 
+                    ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
+                    : getSubjectColor(selectedSubject),
                   labelColor: (opacity = 1) => theme.colors.text,
                   strokeWidth: 2,
                   propsForBackgroundLines: {
@@ -538,34 +712,47 @@ export default function ParentScreen() {
                     strokeOpacity: 0.1,
                   },
                   propsForLabels: {
-                    display: 'none',
+                    fontSize: 10,
                   },
+                  formatYLabel: (yLabel: string) => {
+                    const value = parseInt(yLabel, 10);
+                    const labels = ['', 'Low', '', 'Med', '', 'High'];
+                    return labels[value] || '';
+                  }
                 }}
                 bezier
-                style={styles.chart}
+                style={{
+                  ...styles.chart,
+                  elevation: 0
+                }}
                 withVerticalLines={false}
                 withHorizontalLines={true}
                 withDots={true}
                 withShadow={false}
                 segments={4}
-                withVerticalLabels={false}
-                withHorizontalLabels={false}
-                formatYLabel={() => ''}
+                withVerticalLabels={true}
+                withHorizontalLabels={true}
                 fromZero={true}
+                yAxisInterval={1}
               />
             </View>
           </Surface>
 
           {/* Understanding Chart */}
-          <Surface style={styles.chartCard}>
+          <Surface style={[
+            styles.chartCard,
+            { borderLeftColor: selectedSubject === 'all' ? theme.colors.primary : getSubjectColor(selectedSubject) }
+          ]}>
             <Title style={styles.chartTitle}>Topic Understanding</Title>
             <View style={styles.chartWrapper}>
               <LineChart
                 data={{
-                  labels: data.dates,
+                  labels: filteredData.dates,
                   datasets: [{ 
-                    data: data.understanding,
-                    color: (opacity = 1) => theme.colors.secondary || theme.colors.primary,
+                    data: filteredData.understanding,
+                    color: (opacity = 1) => selectedSubject === 'all'
+                      ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
+                      : getSubjectColor(selectedSubject),
                     strokeWidth: 2,
                   }],
                 }}
@@ -576,7 +763,9 @@ export default function ParentScreen() {
                   backgroundGradientFrom: theme.colors.surface,
                   backgroundGradientTo: theme.colors.surface,
                   decimalPlaces: 0,
-                  color: (opacity = 1) => theme.colors.secondary || theme.colors.primary,
+                  color: (opacity = 1) => selectedSubject === 'all'
+                    ? `rgba(33, 150, 243, ${opacity})`  // Default blue for 'all'
+                    : getSubjectColor(selectedSubject),
                   labelColor: (opacity = 1) => theme.colors.text,
                   strokeWidth: 2,
                   propsForBackgroundLines: {
@@ -585,20 +774,28 @@ export default function ParentScreen() {
                     strokeOpacity: 0.1,
                   },
                   propsForLabels: {
-                    display: 'none',
+                    fontSize: 10,
                   },
+                  formatYLabel: (yLabel: string) => {
+                    const value = parseInt(yLabel, 10);
+                    const labels = ['', 'Basic', '', 'Good', '', 'Exc'];
+                    return labels[value] || '';
+                  }
                 }}
                 bezier
-                style={styles.chart}
+                style={{
+                  ...styles.chart,
+                  elevation: 0
+                }}
                 withVerticalLines={false}
                 withHorizontalLines={true}
                 withDots={true}
                 withShadow={false}
                 segments={4}
-                withVerticalLabels={false}
-                withHorizontalLabels={false}
-                formatYLabel={() => ''}
+                withVerticalLabels={true}
+                withHorizontalLabels={true}
                 fromZero={true}
+                yAxisInterval={1}
               />
             </View>
           </Surface>
@@ -661,6 +858,41 @@ export default function ParentScreen() {
     });
   };
 
+  // Add this function to get engagement style
+  const getEngagementStyle = (level: string) => {
+    switch (level) {
+      case 'Highly Engaged':
+        return styles.engagementHigh;
+      case 'Engaged':
+        return styles.engagementMedium;
+      case 'Neutral':
+      case 'Distracted':
+        return styles.engagementLow;
+      default:
+        return {};
+    }
+  };
+
+  // Add toggle function for months
+  const toggleMonth = (monthKey: string) => {
+    setCollapsedMonths(prev => ({
+      ...prev,
+      [monthKey]: !prev[monthKey]
+    }));
+  };
+
+  // Add a function to get class header color based on class ID
+  const getClassHeaderColor = (classId: string): string => {
+    // Generate a consistent pastel color based on the class ID
+    const hash = classId.split('').reduce((acc, char) => {
+      return char.charCodeAt(0) + ((acc << 5) - acc);
+    }, 0);
+    
+    // Generate pastel colors by keeping high lightness
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h}, 70%, 90%)`;
+  };
+
   return (
     <PaperProvider theme={theme}>
       <Appbar.Header>
@@ -689,37 +921,39 @@ export default function ParentScreen() {
           </View>
         ) : (
           <>
-            {/* Student selector chips */}
-            <View style={[
-              styles.studentChipsWrapper, 
-              themedStyles.studentChipsWrapper
-            ]}>
+            {/* Student selector */}
+            <View style={styles.studentChipsWrapper}>
+              <Text style={styles.studentChipsLabel}>My Children</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[
-                  styles.studentChipsContainer,
-                  themedStyles.studentChipsWrapper
-                ]}
+                contentContainerStyle={styles.studentChipsContainer}
               >
                 {students.map(student => (
-                  <Chip
+                  <TouchableOpacity
                     key={student.id}
-                    selected={selectedStudent?.id === student.id}
                     onPress={() => setSelectedStudent(student)}
                     style={[
                       styles.studentChip,
-                      selectedStudent?.id === student.id && { 
-                        backgroundColor: theme.colors.primaryContainer 
-                      }
+                      selectedStudent?.id === student.id && styles.studentChipSelected
                     ]}
-                    mode="outlined"
                   >
-                    {student.name}
-                  </Chip>
+                    <Text style={styles.studentChipText}>
+                      {student.name}
+                    </Text>
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
+
+            {/* Add student row */}
+            <TouchableOpacity 
+              style={styles.addStudentRow}
+              onPress={() => setAddStudentModalVisible(true)}
+            >
+              <Icon source="account-plus" size={20} color="#A6A6A6" />
+              <Text style={styles.addStudentText}>Add a new child account</Text>
+            </TouchableOpacity>
 
             {/* Session notes for selected student */}
             {selectedStudent && !loadingNotes && (
@@ -744,53 +978,75 @@ export default function ParentScreen() {
                 {showAnalytics ? (
                   <AnalyticsView data={analyticsData} />
                 ) : (
-                  <ScrollView>
+                  <ScrollView style={styles.listContent}>
                     {organizeNotesByClassAndWeek(sessionNotes).map((classGroup) => (
-                      <Surface 
-                        key={classGroup.classId}
-                        style={[styles.classSection, { backgroundColor: theme.colors.surface }]}
-                      >
-                        <Title style={[styles.classTitle, { color: theme.colors.primary }]}>
-                          {classGroup.className}
-                        </Title>
-                        
-                        {classGroup.weeklyNotes.map((weekGroup) => (
-                          <List.Accordion
-                            key={weekGroup.weekStart}
-                            title={`Week of ${format(new Date(weekGroup.weekStart), "MMMM d, yyyy")}`}
-                            style={styles.weekAccordion}
-                          >
-                            {weekGroup.notes.map((note) => (
-                              <Card 
-                                key={note.id}
-                                style={[styles.noteCard, { backgroundColor: theme.colors.surfaceVariant }]}
-                                onPress={() => handleViewNoteDetails(note)}
+                      <View key={classGroup.classId} style={styles.classCard}>
+                        <View 
+                          style={[
+                            styles.classHeader,
+                            { backgroundColor: getClassHeaderColor(classGroup.classId) }
+                          ]}
+                        >
+                          <Text style={styles.classTitle}>
+                            {availableClasses.find(c => c.id === classGroup.classId)?.name || 'Unknown Class'}
+                          </Text>
+                        </View>
+                        {classGroup.weeklyNotes.map((weekGroup) => {
+                          const monthKey = `${classGroup.classId}-${weekGroup.weekStart}`;
+                          const isCollapsed = collapsedMonths[monthKey];
+                          
+                          return (
+                            <View key={weekGroup.weekStart} style={styles.monthSection}>
+                              <TouchableOpacity 
+                                style={styles.monthHeader}
+                                onPress={() => toggleMonth(monthKey)}
                               >
-                                <Card.Content>
-                                  <Paragraph style={{ color: theme.colors.text }}>
-                                    Topic: {
-                                      note.topic_id ? 
-                                      availableTopics.find(t => t.id === note.topic_id)?.name : 
-                                      note.topic || 'No Topic'
-                                    }
-                                  </Paragraph>
-                                  <Paragraph style={{ color: theme.colors.text }}>
-                                    Date: {format(new Date(note.session_date), "MMMM d, yyyy")}
-                                  </Paragraph>
-                                  <Paragraph style={{ color: theme.colors.text }}>
-                                    Engagement: {note.engagement_level}
-                                  </Paragraph>
-                                  <Card.Actions>
-                                    <Button onPress={() => handleOpenFeedbackModal(note)}>
-                                      {note.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
-                                    </Button>
-                                  </Card.Actions>
-                                </Card.Content>
-                              </Card>
-                            ))}
-                          </List.Accordion>
-                        ))}
-                      </Surface>
+                                <Text style={styles.monthText}>
+                                  {format(new Date(weekGroup.weekStart), "MMMM yyyy")}
+                                </Text>
+                                <Icon 
+                                  source={isCollapsed ? "chevron-right" : "chevron-down"} 
+                                  size={14} 
+                                  color="#A6A6A6" 
+                                />
+                              </TouchableOpacity>
+                              <View style={styles.divider} />
+                              {!isCollapsed && weekGroup.notes.map((note) => (
+                                <TouchableOpacity
+                                  key={note.id}
+                                  style={styles.sessionCard}
+                                  onPress={() => handleViewNoteDetails(note)}
+                                >
+                                  {note.file_url ? (
+                                    <Image
+                                      source={{ uri: note.file_url }}
+                                      style={styles.sessionImage}
+                                    />
+                                  ) : (
+                                    <View style={[styles.sessionImage, styles.noImagePlaceholder]}>
+                                      <Icon source="image-off" size={24} color="#A6A6A6" />
+                                    </View>
+                                  )}
+                                  <View style={styles.sessionContent}>
+                                    <Text style={styles.sessionSubject}>
+                                      {note.topic || 'Untitled Topic'}
+                                    </Text>
+                                    <Text style={styles.sessionDate}>
+                                      {format(new Date(note.session_date), "d MMMM yyyy")}
+                                    </Text>
+                                    <Text style={[styles.sessionEngagement, getEngagementStyle(note.engagement_level)]}>
+                                      {note.engagement_level}
+                                    </Text>
+                                    <Text style={styles.sessionNotes} numberOfLines={2}>
+                                      {note.tutor_notes}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          );
+                        })}
+                      </View>
                     ))}
                   </ScrollView>
                 )}
@@ -820,14 +1076,14 @@ export default function ParentScreen() {
             <Text style={[styles.modalDescription, { color: theme.colors.text }]}>
               Enter the student code provided by your tutor to link a student to your account.
             </Text>
-            <TextInput
+        <TextInput
               label="Student Code"
-              value={studentCode}
-              onChangeText={setStudentCode}
-              mode="outlined"
+          value={studentCode}
+          onChangeText={setStudentCode}
+          mode="outlined"
               theme={theme}
-              style={styles.input}
-            />
+          style={styles.input}
+        />
             <View style={styles.modalButtons}>
               <Button
                 onPress={() => {
@@ -837,8 +1093,8 @@ export default function ParentScreen() {
               >
                 Cancel
               </Button>
-              <Button
-                mode="contained"
+        <Button
+          mode="contained"
                 onPress={handleAddStudent}
                 loading={addingStudent}
                 disabled={addingStudent || !studentCode.trim()}
@@ -872,11 +1128,11 @@ export default function ParentScreen() {
               >
                 Cancel
               </Button>
-              <Button
-                mode="contained"
-                onPress={handleSaveFeedback}
-              >
-                Save Feedback
+            <Button
+              mode="contained"
+              onPress={handleSaveFeedback}
+            >
+              Save Feedback
               </Button>
             </View>
           </Modal>
@@ -975,8 +1231,8 @@ export default function ParentScreen() {
                     }}
                   >
                     {selectedNote.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
-                  </Button>
-                  <Button
+            </Button>
+            <Button
                     onPress={() => {
                       setDetailModalVisible(false);
                       setSelectedNote(null);
@@ -984,7 +1240,7 @@ export default function ParentScreen() {
                     style={styles.closeButton}
                   >
                     Close
-                  </Button>
+            </Button>
                 </View>
               </ScrollView>
             )}
@@ -1007,35 +1263,102 @@ export default function ParentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F3F2F8',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  studentChipsWrapper: {
+    paddingTop: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(221, 221, 221, 0.87)',
+  },
+  studentChipsLabel: {
+    fontSize: 14,
+    color: '#A6A6A6',
+    marginLeft: 19,
+    marginBottom: 8,
+  },
   studentChipsContainer: {
     padding: 16,
     paddingBottom: 8,
-    height: 80,
-  },
-  studentChipsWrapper: {
-    height: 80,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128,128,128,0.2)',
   },
   studentChip: {
     marginRight: 8,
     marginBottom: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: '#DDDDDD',
   },
-  studentHeader: {
-    padding: 16,
-    marginHorizontal: 16,
-    borderRadius: 8,
-    marginBottom: 16,
+  studentChipSelected: {
+    backgroundColor: 'rgba(31, 156, 255, 0.38)',
+    borderColor: '#1F9CFF',
+    borderWidth: 0.4,
   },
-  card: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+  studentChipText: {
+    fontSize: 16,
+    color: '#000000',
+  },
+  addStudentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  addStudentText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#A6A6A6',
+  },
+  classCard: {
+    marginHorizontal: 20,
+    marginVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 2,
+      height: 4,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  classHeader: {
+    height: 59,
+    justifyContent: 'center',
+    paddingHorizontal: 17,
+  },
+  noImagePlaceholder: {
+    backgroundColor: 'rgba(221, 221, 221, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  classTitle: {
+    fontSize: 24,
+    color: '#000000',
+    fontWeight: '600',
+  },
+  monthSection: {
+    paddingHorizontal: 16,
+  },
+  monthHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  monthText: {
+    fontSize: 14,
+    color: '#000000',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(221, 221, 221, 0.87)',
   },
   input: {
     marginBottom: 16,
@@ -1107,6 +1430,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 12,
     elevation: 2,
+    borderLeftWidth: 4,
+    backgroundColor: '#FFFFFF',
   },
   chartWrapper: {
     alignItems: 'center',
@@ -1126,12 +1451,22 @@ const styles = StyleSheet.create({
   },
   subjectChip: {
     marginRight: 8,
+    borderRadius: 15,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  subjectChipSelected: {
+    borderWidth: 1,
+  },
+  subjectChipText: {
+    fontSize: 14,
   },
   statsCard: {
     padding: 16,
     marginBottom: 16,
     borderRadius: 12,
     elevation: 2,
+    backgroundColor: '#FFFFFF',
   },
   statsTitle: {
     fontSize: 16,
@@ -1151,7 +1486,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
   },
   chart: {
@@ -1175,23 +1510,48 @@ const styles = StyleSheet.create({
   closeButton: {
     marginTop: 8,
   },
-  classSection: {
-    margin: 16,
-    borderRadius: 12,
-    elevation: 2,
-    overflow: 'hidden',
+  sessionCard: {
+    flexDirection: 'row',
+    padding: 12,
+    marginVertical: 8,
+    backgroundColor: 'rgba(221, 221, 221, 0.26)',
+    borderRadius: 10,
   },
-  classTitle: {
-    padding: 16,
-    fontSize: 20,
-    fontWeight: 'bold',
+  sessionImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 12,
   },
-  weekAccordion: {
-    backgroundColor: 'transparent',
+  sessionContent: {
+    flex: 1,
   },
-  noteCard: {
-    margin: 8,
-    marginHorizontal: 16,
-    elevation: 1,
+  sessionSubject: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  sessionDate: {
+    fontSize: 14,
+    color: '#A6A6A6',
+    marginBottom: 4,
+  },
+  sessionEngagement: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  sessionNotes: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  engagementHigh: {
+    color: '#4CAF50',
+  },
+  engagementMedium: {
+    color: '#FFB700',
+  },
+  engagementLow: {
+    color: '#FF4B4B',
   },
 });
