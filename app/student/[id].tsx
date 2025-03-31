@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, FlatList, StyleSheet, ScrollView, useColorScheme } from "react-native";
+import { View, FlatList, StyleSheet, ScrollView, useColorScheme, Platform } from "react-native";
 import {
   Appbar,
   TextInput,
@@ -20,6 +20,7 @@ import {
   useTheme,
   adaptNavigationTheme,
   Surface,
+  Text,
 } from "react-native-paper";
 import RNPickerSelect from "react-native-picker-select";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -114,6 +115,9 @@ export default function StudentView() {
   // Add to your state declarations
   const [showCompletionRate, setShowCompletionRate] = useState(false);
   const [assignmentCompletion, setAssignmentCompletion] = useState<string>('');
+
+  // Add this state for handling web date input
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useEffect(() => {
     fetchSessionNotes();
@@ -264,7 +268,7 @@ export default function StudentView() {
       setSnackbarVisible(true);
       return;
     }
-
+    
     try {
       if (editingNote) {
         await updateSessionNote({
@@ -352,6 +356,14 @@ export default function StudentView() {
     return `${classItem.name} (${classItem.subject})`;
   };
 
+  // Add this function to handle date changes
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setSessionDate(selectedDate);
+    }
+  };
+
   return (
     <PaperProvider>
       <Appbar.Header>
@@ -420,7 +432,7 @@ export default function StudentView() {
                 <Paragraph>Understanding: {item.understanding_level}</Paragraph>
                 {item.homework_assigned && (
                   <>
-                    <Paragraph>Homework: {item.homework_assigned}</Paragraph>
+                <Paragraph>Homework: {item.homework_assigned}</Paragraph>
                     {item.assignment_completion !== undefined && (
                       <Paragraph>
                         Completion Rate: {item.assignment_completion}%
@@ -470,7 +482,7 @@ export default function StudentView() {
 
               {/* CLASS SELECTION */}
               <View style={styles.formField}>
-                <Title style={styles.fieldLabel}>Class</Title>
+                <Text style={styles.inputHeader}>Class</Text>
                 {loadingClasses ? (
                   <ActivityIndicator size="small" />
                 ) : (
@@ -491,7 +503,7 @@ export default function StudentView() {
               {/* TOPIC SELECTION (Optional) */}
               {selectedClass && (
                 <View style={styles.formField}>
-                  <Title style={styles.fieldLabel}>Topic (Optional)</Title>
+                  <Text style={styles.inputHeader}>Topic (Optional)</Text>
                   {loadingTopics ? (
                     <ActivityIndicator size="small" />
                   ) : availableTopics.length > 0 ? (
@@ -518,72 +530,122 @@ export default function StudentView() {
 
               {/* DATE PICKER */}
               <View style={styles.formField}>
-                <Title style={styles.fieldLabel}>Session Date</Title>
+                <Text style={styles.inputHeader}>Session Date</Text>
+                {Platform.OS === 'web' ? (
+                  <TextInput
+                    label="Session Date"
+                    value={format(sessionDate, 'yyyy-MM-dd')}
+                    onChangeText={() => {}}
+                    right={
+                      <TextInput.Icon 
+                        icon="calendar" 
+                        onPress={() => setShowDatePicker(true)}
+                      />
+                    }
+                    style={styles.input}
+                  />
+                ) : (
                 <DateTimePicker
                   value={sessionDate}
                   mode="date"
                   display="default"
-                  onChange={(event, selectedDate) => {
-                    if (selectedDate) setSessionDate(selectedDate);
-                  }}
-                />
+                    onChange={handleDateChange}
+                  />
+                )}
+                
+                {Platform.OS === 'web' && showDatePicker && (
+                  <Portal>
+                    <Modal
+                      visible={showDatePicker}
+                      onDismiss={() => setShowDatePicker(false)}
+                      contentContainerStyle={[
+                        styles.datePickerModal,
+                        { backgroundColor: theme.colors.surface }
+                      ]}
+                    >
+                      <View>
+                        <Title style={styles.modalTitle}>Select Date</Title>
+                        <input
+                          type="date"
+                          value={format(sessionDate, 'yyyy-MM-dd')}
+                          onChange={(e) => {
+                            const newDate = new Date(e.target.value);
+                            setSessionDate(newDate);
+                          }}
+                          style={styles.webDateInput}
+                        />
+                        <View style={styles.datePickerButtons}>
+                          <Button onPress={() => setShowDatePicker(false)}>
+                            Done
+                          </Button>
+                        </View>
+                      </View>
+                    </Modal>
+                  </Portal>
+                )}
               </View>
 
               {/* LESSON SUMMARY INPUT */}
+              <View style={styles.formField}>
+                <Text style={styles.inputHeader}>Lesson Summary</Text>
               <TextInput
-                label="Lesson Summary"
                 value={lessonSummary}
                 onChangeText={setLessonSummary}
                 style={styles.input}
                 multiline
               />
+              </View>
 
               {/* HOMEWORK INPUT */}
+              <View style={styles.formField}>
+                <Text style={styles.inputHeader}>Homework Assigned</Text>
               <TextInput
-                label="Homework Assigned"
                 value={homeworkAssigned}
                 onChangeText={setHomeworkAssigned}
                 style={styles.input}
-                multiline
-              />
+                  multiline
+                />
+              </View>
 
               {homeworkAssigned && (
-                <Surface style={styles.completionSection}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => setShowCompletionRate(!showCompletionRate)}
-                    style={styles.completionButton}
-                  >
-                    {showCompletionRate ? 'Hide Assignment Completion' : 'Add Assignment Completion'}
-                  </Button>
-                  
-                  {showCompletionRate && (
-                    <View style={styles.completionContainer}>
-                      <TextInput
-                        label="Assignment Completion (%)"
-                        value={assignmentCompletion}
-                        onChangeText={(text) => {
-                          const numericValue = text.replace(/[^0-9]/g, '');
-                          if (numericValue === '' || parseInt(numericValue, 10) <= 100) {
-                            setAssignmentCompletion(numericValue);
-                          }
-                        }}
-                        keyboardType="numeric"
-                        style={styles.completionInput}
-                        placeholder="Enter completion rate (0-100)"
-                        maxLength={3}
-                      />
-                      <Paragraph style={styles.completionHelper}>
-                        Enter a value between 0 and 100
-                      </Paragraph>
-                    </View>
-                  )}
-                </Surface>
+                <View style={styles.formField}>
+                  <Text style={styles.inputHeader}>Assignment Completion</Text>
+                  <View style={styles.completionSection}>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowCompletionRate(!showCompletionRate)}
+                      style={styles.completionButton}
+                    >
+                      {showCompletionRate ? 'Hide Completion Rate' : 'Add Completion Rate'}
+                    </Button>
+                    
+                    {showCompletionRate && (
+                      <View style={styles.completionContainer}>
+                        <TextInput
+                          value={assignmentCompletion}
+                          onChangeText={(text) => {
+                            const numericValue = text.replace(/[^0-9]/g, '');
+                            if (numericValue === '' || parseInt(numericValue, 10) <= 100) {
+                              setAssignmentCompletion(numericValue);
+                            }
+                          }}
+                          keyboardType="numeric"
+                          style={styles.completionInput}
+                          placeholder="Enter completion rate (0-100)"
+                          maxLength={3}
+                        />
+                        <Paragraph style={styles.completionHelper}>
+                          Enter a value between 0 and 100
+                        </Paragraph>
+                      </View>
+                    )}
+                  </View>
+                </View>
               )}
 
               {/* ENGAGEMENT LEVEL DROPDOWN */}
-              <View style={styles.pickerContainer}>
-                <Title style={styles.fieldLabel}>Engagement Level</Title>
+              <View style={styles.formField}>
+                <Text style={styles.inputHeader}>Engagement Level</Text>
                 <RNPickerSelect
                   onValueChange={(
                     value: "Highly Engaged" | "Engaged" | "Neutral" | "Distracted"
@@ -602,8 +664,8 @@ export default function StudentView() {
               </View>
 
               {/* UNDERSTANDING LEVEL DROPDOWN */}
-              <View style={styles.pickerContainer}>
-                <Title style={styles.fieldLabel}>Understanding Level</Title>
+              <View style={styles.formField}>
+                <Text style={styles.inputHeader}>Understanding Level</Text>
                 <RNPickerSelect
                   onValueChange={(value: "Excellent" | "Good" | "Fair" | "Needs Improvement") => 
                     setUnderstandingLevel(value)
@@ -622,15 +684,18 @@ export default function StudentView() {
               </View>
 
               {/* TUTOR NOTES */}
+              <View style={styles.formField}>
+                <Text style={styles.inputHeader}>Tutor Notes</Text>
               <TextInput
-                label="Tutor Notes"
                 value={tutorNotes}
                 onChangeText={setTutorNotes}
                 style={styles.input}
                 multiline
               />
+              </View>
 
               {/* ADD/UPDATE BUTTON */}
+              <View style={styles.buttonContainer}>
               <Button
                 mode="contained"
                 onPress={handleAddOrUpdateSessionNote}
@@ -640,7 +705,6 @@ export default function StudentView() {
                 {editingNote ? "Update Note" : "Add Note"}
               </Button>
 
-              {/* CLOSE MODAL BUTTON */}
               <Button
                 onPress={() => {
                   setModalVisible(false);
@@ -650,6 +714,7 @@ export default function StudentView() {
               >
                 Cancel
               </Button>
+              </View>
             </ScrollView>
           </Modal>
         </Portal>
@@ -711,10 +776,11 @@ const styles = StyleSheet.create({
   formField: {
     marginBottom: 16,
   },
-  fieldLabel: {
+  inputHeader: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: '500',
     marginBottom: 8,
+    opacity: 0.8,
   },
   divider: {
     marginVertical: 16,
@@ -744,6 +810,31 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginBottom: 8,
   },
+  datePickerModal: {
+    padding: 20,
+    margin: 20,
+    borderRadius: 8,
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  webDateInput: {
+    fontSize: 16,
+    padding: 8,
+    marginVertical: 16,
+    width: '100%',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  datePickerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+  },
+  buttonContainer: {
+    marginTop: 24,
+    gap: 12,
+  },
 });
 
 const pickerSelectStyles = StyleSheet.create({
@@ -752,22 +843,22 @@ const pickerSelectStyles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: '#ddd',
     borderRadius: 4,
-    color: "black",
+    color: 'black',
     paddingRight: 30,
-    backgroundColor: "white",
+    backgroundColor: '#f8f8f8',
   },
   inputAndroid: {
     fontSize: 16,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    color: "black",
+    borderColor: '#ddd',
+    borderRadius: 4,
+    color: 'black',
     paddingRight: 30,
-    backgroundColor: "white",
+    backgroundColor: '#f8f8f8',
   },
 });
 
