@@ -1779,6 +1779,15 @@ export default function StudentView() {
                                         </Text>
                                     </View>
 
+                                    <View style={styles.detailSection}>
+                                        <Text style={styles.detailLabel}>Parent Feedback</Text>
+                                        <Text style={styles.detailValue}>
+                                            {selectedNote.parent_feedback || (
+                                                <Text style={styles.emptyStateText}>No parent feedback provided</Text>
+                                            )}
+                                        </Text>
+                                    </View>
+
                                     {/* Images Section */}
                                     <View style={styles.detailSection}>
                                         <Text style={styles.detailLabel}>Images</Text>

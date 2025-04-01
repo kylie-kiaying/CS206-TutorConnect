@@ -54,6 +54,28 @@ export const getSessionNotes = async (student_id: string): Promise<SessionNote[]
   }
 
   try {
+    console.log(`Fetching session notes for student ID: ${student_id}`);
+    
+    // First, verify the student exists
+    const { data: studentData, error: studentError } = await supabase
+      .from("students")
+      .select("id, name")
+      .eq("id", student_id)
+      .single();
+
+    if (studentError) {
+      console.error("Error checking student existence:", studentError);
+      return [];
+    }
+
+    if (!studentData) {
+      console.error(`No student found with ID: ${student_id}`);
+      return [];
+    }
+
+    console.log(`Found student: ${studentData.name}`);
+
+    // Now fetch the session notes
     const { data, error } = await supabase
       .from("session_notes")
       .select(`
@@ -75,6 +97,8 @@ export const getSessionNotes = async (student_id: string): Promise<SessionNote[]
       console.error("Error fetching session notes:", error);
       throw error;
     }
+
+    console.log(`Raw session notes data:`, JSON.stringify(data, null, 2));
 
     if (!data) {
       console.log("No session notes found for student:", student_id);
