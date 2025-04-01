@@ -1,6 +1,20 @@
 import { supabase } from "./supabase";
 import { createSessionNoteNotification } from "./notifications";
 
+export type FileAttachment = {
+  id: string;
+  url: string;
+  type: 'image' | 'pdf' | 'document';
+  name: string;
+};
+
+export type SessionAttachment = {
+  id: string;
+  file_url: string;
+  file_type: string;
+  file_name: string;
+};
+
 export type SessionNote = {
   id: string;
   student_id: string;
@@ -24,7 +38,8 @@ export type SessionNote = {
   objectives?: string[];
   nextSession?: string;
   topic_proficiency?: number; // Score from 1-10
-  file_url?: string;
+  file_url?: string; // First image URL for thumbnail
+  attachments?: FileAttachment[];
   tutor?: {
     name: string;
     subject: string;
@@ -67,15 +82,20 @@ export const getSessionNotes = async (student_id: string): Promise<SessionNote[]
     }
 
     // Transform the data to match the expected format
-    const transformedNotes = (data || []).map(note => ({
-      ...note,
-      subject: note.class?.subject || note.class?.name || 'Unknown Class',
-      topic: note.topic?.name || note.topic || 'Untitled Topic',
-      class_id: note.class?.id || null,
-      topic_id: note.topic?.id || null
-    }));
+    const transformedNotes = (data || []).map(note => {
+      const transformedNote = {
+        ...note,
+        subject: note.class?.subject || note.class?.name || 'Unknown Class',
+        topic: note.topic?.name || note.topic || 'Untitled Topic',
+        class_id: note.class?.id || null,
+        topic_id: note.topic?.id || null,
+        attachments: [] // Initialize empty attachments array - we'll fetch these separately
+      };
+      
+      return transformedNote;
+    });
 
-    console.log(`Found ${transformedNotes.length} session notes for student ${student_id}`);
+    console.log(`Successfully fetched ${transformedNotes.length} session notes for student ${student_id}`);
     return transformedNotes;
   } catch (error) {
     console.error("Error in getSessionNotes:", error);
@@ -85,47 +105,116 @@ export const getSessionNotes = async (student_id: string): Promise<SessionNote[]
 
 // Add a new session note
 export const addSessionNote = async (sessionNote: Omit<SessionNote, "id">) => {
-  const { data, error } = await supabase.from("session_notes").insert([sessionNote]);
-  
-  if (error) {
-    console.error("Error adding session note:", error);
-    return data;
+  try {
+    console.log("Starting addSessionNote process...");
+    console.log("Full session note data:", JSON.stringify(sessionNote, null, 2));
+    console.log("Attachments:", sessionNote.attachments);
+
+    // Create a copy of the session note without attachments
+    const { attachments, ...noteData } = sessionNote;
+
+    // First, insert the session note
+    const { data: insertedNote, error: noteError } = await supabase
+      .from("session_notes")
+      .insert([{
+        ...noteData,
+        file_url: noteData.file_url || null // We'll handle attachments separately
+      }])
+      .select()
+      .single();
+    
+    if (noteError) {
+      console.error("Error creating session note:", noteError);
+      throw noteError;
+    }
+    if (!insertedNote) {
+      console.error("Failed to create session note - no data returned");
+      throw new Error("Failed to create session note");
+    }
+
+    console.log("Session note created successfully with ID:", insertedNote.id);
+
+    // If there are attachments, create attachment records
+    if (attachments && attachments.length > 0) {
+      console.log(`Processing ${attachments.length} attachments...`);
+      
+      const attachmentPromises = attachments.map(async (attachment, index) => {
+        console.log(`Processing attachment ${index + 1}:`, {
+          name: attachment.name,
+          type: attachment.type,
+          url: attachment.url
+        });
+
+        try {
+          // Create attachment record directly with the base64 URL
+          const { error: attachmentError } = await supabase
+            .from('session_attachments')
+            .insert([{
+              session_note_id: insertedNote.id,
+              file_url: attachment.url,
+              file_type: attachment.type,
+              file_name: attachment.name
+            }]);
+
+          if (attachmentError) {
+            console.error(`Error creating attachment record ${index + 1}:`, attachmentError);
+            throw attachmentError;
+          }
+
+          console.log(`Attachment record ${index + 1} created successfully`);
+        } catch (error) {
+          console.error(`Failed to process attachment ${index + 1}:`, error);
+          // Don't throw the error, just log it and continue with other attachments
+          return null;
+        }
+      });
+
+      console.log("Waiting for all attachments to process...");
+      const results = await Promise.all(attachmentPromises);
+      const successfulUploads = results.filter(r => r !== null).length;
+      console.log(`Successfully processed ${successfulUploads} out of ${attachments.length} attachments`);
+    } else {
+      console.log("No attachments to process");
+    }
+
+    // Get the student's name
+    const { data: studentData, error: studentError } = await supabase
+      .from("students")
+      .select("name")
+      .eq("id", sessionNote.student_id)
+      .single();
+
+    if (studentError) {
+      console.error("Error fetching student name:", studentError);
+      return insertedNote;
+    }
+
+    // Get the parent's ID from parent_students table
+    const { data: parentData, error: parentError } = await supabase
+      .from("parent_students")
+      .select("parent_id")
+      .eq("student_id", sessionNote.student_id)
+      .single();
+
+    if (parentError) {
+      console.error("Error fetching parent ID:", parentError);
+      return insertedNote;
+    }
+
+    // Create notification for the parent
+    if (parentData && studentData) {
+      await createSessionNoteNotification(
+        sessionNote.student_id,
+        parentData.parent_id,
+        studentData.name
+      );
+    }
+
+    return insertedNote;
+  } catch (error) {
+    console.error("Error in addSessionNote:", error);
+    throw error;
   }
-
-  // Get the student's name
-  const { data: studentData, error: studentError } = await supabase
-    .from("students")
-    .select("name")
-    .eq("id", sessionNote.student_id)
-    .single();
-
-  if (studentError) {
-    console.error("Error fetching student name:", studentError);
-    return data;
-  }
-
-  // Get the parent's ID from parent_students table
-  const { data: parentData, error: parentError } = await supabase
-    .from("parent_students")
-    .select("parent_id")
-    .eq("student_id", sessionNote.student_id)
-    .single();
-
-  if (parentError) {
-    console.error("Error fetching parent ID:", parentError);
-    return data;
-  }
-
-  // Create notification for the parent
-  if (parentData && studentData) {
-    await createSessionNoteNotification(
-      sessionNote.student_id,
-      parentData.parent_id,
-      studentData.name
-    );
-  }
-
-  return data;
 };
 
 // Update a session note
