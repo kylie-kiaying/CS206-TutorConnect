@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     modalHeaderTitle: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '600',
         flex: 1,
     },
@@ -497,34 +497,83 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     detailSection: {
-        marginBottom: 20,
+        marginBottom: 24,
+        backgroundColor: '#F8F8F8',
+        borderRadius: 12,
+        padding: 16,
     },
     detailLabel: {
-        fontSize: 16,
-        fontWeight: 'bold',
+        fontSize: 14,
+        fontWeight: '500',
         marginBottom: 8,
         color: '#666',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     detailValue: {
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 15,
+        lineHeight: 22,
+        color: '#333',
+    },
+    emptyStateText: {
+        fontSize: 14,
+        color: '#999',
+        fontStyle: 'italic',
+        textAlign: 'center',
+        padding: 8,
     },
     attachmentsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
+        gap: 12,
         marginTop: 8,
     },
     attachmentImage: {
         width: 150,
         height: 150,
         borderRadius: 8,
+        backgroundColor: '#F0F0F0',
+    },
+    documentsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginTop: 8,
+    },
+    documentItem: {
+        width: '48%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        padding: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    documentIconContainer: {
+        marginBottom: 8,
+        backgroundColor: '#F5F5F5',
+        padding: 8,
+        borderRadius: 8,
+    },
+    documentTitle: {
+        fontSize: 13,
+        textAlign: 'center',
+        color: '#333',
+        marginBottom: 4,
+    },
+    documentType: {
+        fontSize: 11,
+        color: '#666',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     detailActions: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 20,
-        marginBottom: 20,
+        marginTop: 24,
+        marginBottom: 16,
+        paddingHorizontal: 16,
     },
     imagePreviewModalContainer: {
         flex: 1,
@@ -567,6 +616,35 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 24,
         fontWeight: 'bold',
+    },
+    documentContainer: {
+        width: '48%',
+        aspectRatio: 1,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+        borderStyle: 'dashed',
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        backgroundColor: '#F5F5F5',
+    },
+    documentIcon: {
+        marginBottom: 8,
+    },
+    documentName: {
+        fontSize: 12,
+        textAlign: 'center',
+        marginTop: 4,
+        color: '#666',
+    },
+    levelBadge: {
+        padding: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        marginBottom: 12,
+        alignSelf: 'center',
+        minWidth: 120,
     },
 });
 
@@ -824,6 +902,9 @@ export default function StudentView() {
     const [selectedNote, setSelectedNote] = useState<SessionNote | null>(null);
     const [detailModalVisible, setDetailModalVisible] = useState(false);
 
+    // Add new state for document attachments
+    const [selectedDocuments, setSelectedDocuments] = useState<Array<{ uri: string; name: string; type: string }>>([]);
+
     useEffect(() => {
         fetchSessionNotes();
         fetchAvailableClasses();
@@ -1025,6 +1106,42 @@ export default function StudentView() {
         setFilteredNotes([...filtered]);
     };
 
+    // Add new function to handle document picking
+    const handleDocumentPick = async () => {
+        try {
+            // Create a file input element
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.accept = '.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx';
+            
+            input.onchange = (event) => {
+                const files = (event.target as HTMLInputElement).files;
+                if (files) {
+                    const newDocuments = Array.from(files).map(file => ({
+                        uri: URL.createObjectURL(file),
+                        name: file.name,
+                        type: file.type.includes('pdf') ? 'pdf' : 'document'
+                    }));
+                    setSelectedDocuments(prev => [...prev, ...newDocuments]);
+                }
+            };
+
+            // Trigger the file picker
+            input.click();
+        } catch (error) {
+            console.error('Error picking documents:', error);
+            setSnackbarMessage('Error selecting documents');
+            setSnackbarVisible(true);
+        }
+    };
+
+    // Add function to remove a document
+    const handleRemoveDocument = (index: number) => {
+        setSelectedDocuments(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Update handleAddOrUpdateSessionNote to include documents
     const handleAddOrUpdateSessionNote = async () => {
         if (!id || !selectedClass) {
             setSnackbarMessage("Please select a class");
@@ -1045,12 +1162,20 @@ export default function StudentView() {
                 tutor_notes: tutorNotes,
                 parent_feedback: '',
                 file_url: selectedImages[0] || "", // Use first image as thumbnail
-                attachments: selectedImages.map((url, index) => ({
-                    id: Math.random().toString(36).substring(7),
-                    url,
-                    type: 'image' as const,
-                    name: `Session Image ${index + 1}`
-                }))
+                attachments: [
+                    ...selectedImages.map((url, index) => ({
+                        id: Math.random().toString(36).substring(7),
+                        url,
+                        type: 'image' as const,
+                        name: `Session Image ${index + 1}`
+                    })),
+                    ...selectedDocuments.map((doc, index) => ({
+                        id: Math.random().toString(36).substring(7),
+                        url: doc.uri,
+                        type: doc.type as 'pdf' | 'document',
+                        name: doc.name
+                    }))
+                ]
             };
 
             if (editingNote) {
@@ -1075,6 +1200,7 @@ export default function StudentView() {
         }
     };
 
+    // Update resetForm to include documents
     const resetForm = () => {
         setSessionDate(new Date());
         setSelectedClass(null);
@@ -1089,6 +1215,7 @@ export default function StudentView() {
         setShowCompletionRate(false);
         setEditingNote(null);
         setSelectedImages([]);
+        setSelectedDocuments([]);
         setTopicSearchQuery('');
         setSelectedTopics([]);
         setCollapsedMonths({});
@@ -1326,6 +1453,23 @@ export default function StudentView() {
         }
     };
 
+    // Add this function near the other handlers
+    const handleDocumentDownload = async (url: string, fileName: string) => {
+        try {
+            // Create a temporary anchor element
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName; // Set the download filename
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error('Error downloading document:', error);
+            setSnackbarMessage('Error downloading document');
+            setSnackbarVisible(true);
+        }
+    };
+
     return (
         <PaperProvider>
             <Appbar.Header>
@@ -1419,7 +1563,11 @@ export default function StudentView() {
                                                     <Text style={[styles.proficiencyValue, {
                                                         color: note.understanding_level === 'Excellent' ? '#4CAF50' :
                                                             note.understanding_level === 'Good' ? '#FFB700' :
-                                                                note.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B'
+                                                                note.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B',
+                                                        textAlign: 'center',
+                                                        marginBottom: 4,
+                                                        fontSize: 16,
+                                                        fontWeight: '500'
                                                     }]}>
                                                         {note.understanding_level}
                                                     </Text>
@@ -1507,74 +1655,190 @@ export default function StudentView() {
 
                                     <View style={styles.detailSection}>
                                         <Text style={styles.detailLabel}>Engagement Level</Text>
-                                        <Text style={[styles.detailValue, {
-                                            color: selectedNote.engagement_level === 'Highly Engaged' ? '#4CAF50' :
+                                        <View style={[styles.levelBadge, {
+                                            backgroundColor: selectedNote.engagement_level === 'Highly Engaged' ? 'rgba(76, 175, 80, 0.1)' :
+                                                selectedNote.engagement_level === 'Engaged' ? 'rgba(255, 183, 0, 0.1)' :
+                                                    selectedNote.engagement_level === 'Neutral' ? 'rgba(128, 128, 128, 0.1)' : 'rgba(255, 75, 75, 0.1)',
+                                            borderColor: selectedNote.engagement_level === 'Highly Engaged' ? '#4CAF50' :
                                                 selectedNote.engagement_level === 'Engaged' ? '#FFB700' :
                                                     selectedNote.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
                                         }]}>
-                                            {selectedNote.engagement_level}
-                                        </Text>
+                                            <Text style={[styles.detailValue, {
+                                                color: selectedNote.engagement_level === 'Highly Engaged' ? '#4CAF50' :
+                                                    selectedNote.engagement_level === 'Engaged' ? '#FFB700' :
+                                                        selectedNote.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B',
+                                                textAlign: 'center',
+                                                marginBottom: 4,
+                                                fontSize: 16,
+                                                fontWeight: '500'
+                                            }]}>
+                                                {selectedNote.engagement_level}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.sliderContainer}>
+                                            <LinearGradient
+                                                colors={['#FF4B4B', '#FFB700', '#4CAF50']}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 0 }}
+                                                style={[styles.sliderTrack, { position: 'absolute', width: '100%' }]}
+                                            />
+                                            <Slider
+                                                style={styles.slider}
+                                                minimumValue={1}
+                                                maximumValue={5}
+                                                step={1}
+                                                value={engagementLevelToNumber(selectedNote.engagement_level)}
+                                                minimumTrackTintColor="transparent"
+                                                maximumTrackTintColor="transparent"
+                                                thumbTintColor="#2196F3"
+                                            />
+                                        </View>
+                                        <View style={styles.sliderLabels}>
+                                            <Text style={[styles.sliderLabel, styles.sliderLabelStart]}>Unattentive</Text>
+                                            <Text style={styles.sliderLabel}>Neutral</Text>
+                                            <Text style={[styles.sliderLabel, styles.sliderLabelEnd]}>Highly Engaged</Text>
+                                        </View>
                                     </View>
 
                                     <View style={styles.detailSection}>
                                         <Text style={styles.detailLabel}>Understanding Level</Text>
-                                        <Text style={[styles.detailValue, {
-                                            color: selectedNote.understanding_level === 'Excellent' ? '#4CAF50' :
+                                        <View style={[styles.levelBadge, {
+                                            backgroundColor: selectedNote.understanding_level === 'Excellent' ? 'rgba(76, 175, 80, 0.1)' :
+                                                selectedNote.understanding_level === 'Good' ? 'rgba(255, 183, 0, 0.1)' :
+                                                    selectedNote.understanding_level === 'Fair' ? 'rgba(255, 167, 38, 0.1)' : 'rgba(255, 75, 75, 0.1)',
+                                            borderColor: selectedNote.understanding_level === 'Excellent' ? '#4CAF50' :
                                                 selectedNote.understanding_level === 'Good' ? '#FFB700' :
                                                     selectedNote.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B'
                                         }]}>
-                                            {selectedNote.understanding_level}
-                                        </Text>
+                                            <Text style={[styles.detailValue, {
+                                                color: selectedNote.understanding_level === 'Excellent' ? '#4CAF50' :
+                                                    selectedNote.understanding_level === 'Good' ? '#FFB700' :
+                                                        selectedNote.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B',
+                                                textAlign: 'center',
+                                                marginBottom: 4,
+                                                fontSize: 16,
+                                                fontWeight: '500'
+                                            }]}>
+                                                {selectedNote.understanding_level}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.sliderContainer}>
+                                            <LinearGradient
+                                                colors={['#FF4B4B', '#FFB700', '#4CAF50']}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 0 }}
+                                                style={[styles.sliderTrack, { position: 'absolute', width: '100%' }]}
+                                            />
+                                            <Slider
+                                                style={styles.slider}
+                                                minimumValue={0}
+                                                maximumValue={4}
+                                                step={1}
+                                                value={
+                                                    selectedNote.understanding_level === 'Poor' ? 0 :
+                                                        selectedNote.understanding_level === 'Needs Improvement' ? 1 :
+                                                            selectedNote.understanding_level === 'Fair' ? 2 :
+                                                                selectedNote.understanding_level === 'Good' ? 3 : 4
+                                                }
+                                                minimumTrackTintColor="transparent"
+                                                maximumTrackTintColor="transparent"
+                                                thumbTintColor="#2196F3"
+                                            />
+                                        </View>
+                                        <View style={styles.sliderLabels}>
+                                            <Text style={[styles.sliderLabel, styles.sliderLabelStart]}>Poor</Text>
+                                            <Text style={styles.sliderLabel}>Fair</Text>
+                                            <Text style={[styles.sliderLabel, styles.sliderLabelEnd]}>Excellent</Text>
+                                        </View>
                                     </View>
 
                                     <View style={styles.detailSection}>
                                         <Text style={styles.detailLabel}>Lesson Summary</Text>
-                                        <Text style={styles.detailValue}>{selectedNote.lesson_summary}</Text>
+                                        <Text style={styles.detailValue}>
+                                            {selectedNote.lesson_summary || (
+                                                <Text style={styles.emptyStateText}>No lesson summary provided</Text>
+                                            )}
+                                        </Text>
                                     </View>
 
                                     <View style={styles.detailSection}>
                                         <Text style={styles.detailLabel}>Homework Assigned</Text>
                                         <Text style={styles.detailValue}>
-                                            {selectedNote.homework_assigned || 'No homework assigned'}
+                                            {selectedNote.homework_assigned || (
+                                                <Text style={styles.emptyStateText}>No homework assigned</Text>
+                                            )}
                                         </Text>
                                     </View>
 
                                     <View style={styles.detailSection}>
                                         <Text style={styles.detailLabel}>Tutor Notes</Text>
-                                        <Text style={styles.detailValue}>{selectedNote.tutor_notes}</Text>
+                                        <Text style={styles.detailValue}>
+                                            {selectedNote.tutor_notes || (
+                                                <Text style={styles.emptyStateText}>No tutor notes provided</Text>
+                                            )}
+                                        </Text>
                                     </View>
 
                                     {/* Images Section */}
                                     <View style={styles.detailSection}>
                                         <Text style={styles.detailLabel}>Images</Text>
                                         <View style={styles.attachmentsGrid}>
-                                            {/* Show all attachments including the thumbnail */}
-                                            {selectedNote.attachments && selectedNote.attachments.map((attachment, index) => (
-                                                <TouchableOpacity
-                                                    key={attachment.id || index}
-                                                    onPress={() => handleImagePress(attachment.url)}
-                                                    style={styles.attachmentImage}
-                                                >
-                                                    <Image
-                                                        source={{ uri: attachment.url }}
-                                                        style={styles.attachmentImage}
-                                                    />
-                                                </TouchableOpacity>
-                                            ))}
-                                            {/* Show thumbnail if it exists and isn't already in attachments */}
-                                            {selectedNote.file_url &&
-                                                (!selectedNote.attachments ||
-                                                    !selectedNote.attachments.some(a => a.url === selectedNote.file_url)) && (
-                                                    <TouchableOpacity
-                                                        onPress={() => handleImagePress(selectedNote.file_url!)}
-                                                        style={styles.attachmentImage}
-                                                    >
-                                                        <Image
-                                                            source={{ uri: selectedNote.file_url }}
+                                            {selectedNote.attachments && selectedNote.attachments
+                                                .filter(attachment => attachment.type === 'image')
+                                                .length > 0 ? (
+                                                selectedNote.attachments
+                                                    .filter(attachment => attachment.type === 'image')
+                                                    .map((attachment, index) => (
+                                                        <TouchableOpacity
+                                                            key={attachment.id || index}
+                                                            onPress={() => handleImagePress(attachment.url)}
                                                             style={styles.attachmentImage}
-                                                        />
-                                                    </TouchableOpacity>
-                                                )}
+                                                        >
+                                                            <Image
+                                                                source={{ uri: attachment.url }}
+                                                                style={styles.attachmentImage}
+                                                            />
+                                                        </TouchableOpacity>
+                                                    ))
+                                            ) : (
+                                                <Text style={styles.emptyStateText}>No images attached to this session note</Text>
+                                            )}
+                                        </View>
+                                    </View>
+
+                                    {/* Documents Section */}
+                                    <View style={styles.detailSection}>
+                                        <Text style={styles.detailLabel}>Documents</Text>
+                                        <View style={styles.documentsGrid}>
+                                            {selectedNote.attachments && selectedNote.attachments
+                                                .filter(attachment => attachment.type === 'pdf' || attachment.type === 'document')
+                                                .length > 0 ? (
+                                                selectedNote.attachments
+                                                    .filter(attachment => attachment.type === 'pdf' || attachment.type === 'document')
+                                                    .map((attachment, index) => (
+                                                        <TouchableOpacity
+                                                            key={attachment.id || index}
+                                                            style={styles.documentItem}
+                                                            onPress={() => handleDocumentDownload(attachment.url, attachment.name)}
+                                                        >
+                                                            <View style={styles.documentIconContainer}>
+                                                                <Icon
+                                                                    source={attachment.type === 'pdf' ? 'file-pdf-box' : 'file-document'}
+                                                                    size={24}
+                                                                    color="#666"
+                                                                />
+                                                            </View>
+                                                            <Text style={styles.documentTitle} numberOfLines={2}>
+                                                                {attachment.name}
+                                                            </Text>
+                                                            <Text style={styles.documentType}>
+                                                                {attachment.type.toUpperCase()}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    ))
+                                            ) : (
+                                                <Text style={styles.emptyStateText}>No documents attached to this session note</Text>
+                                            )}
                                         </View>
                                     </View>
 
@@ -1808,7 +2072,7 @@ export default function StudentView() {
                                 />
                             </View>
 
-                            {/* Engagement Level Slider */}
+                            {/* Engagement Level */}
                             <View style={styles.formField}>
                                 <Text style={styles.inputHeader}>Engagement Level</Text>
                                 <View style={styles.sliderContainer}>
@@ -1907,6 +2171,51 @@ export default function StudentView() {
                                         >
                                             <IconButton icon="image-plus" size={24} />
                                             <Text>Add Image</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            </View>
+
+                            {/* Document Upload */}
+                            <View style={styles.formField}>
+                                <Text style={styles.inputHeader}>Upload Documents (Optional)</Text>
+                                <View style={styles.imagesGrid}>
+                                    {selectedDocuments.map((doc, index) => (
+                                        <View key={index} style={styles.imageContainer}>
+                                            <View style={styles.documentContainer}>
+                                                <View style={styles.documentIcon}>
+                                                    <Icon
+                                                        source={doc.type === 'pdf' ? 'file-pdf-box' : 'file-document'}
+                                                        size={24}
+                                                        color="#666"
+                                                    />
+                                                </View>
+                                                <Text style={styles.documentName} numberOfLines={2}>
+                                                    {doc.name}
+                                                </Text>
+                                                <Text style={styles.documentType}>
+                                                    {doc.type.toUpperCase()}
+                                                </Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                style={styles.removeImageButton}
+                                                onPress={() => handleRemoveDocument(index)}
+                                            >
+                                                <IconButton
+                                                    icon="close"
+                                                    size={20}
+                                                    iconColor="white"
+                                                />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                    {selectedDocuments.length < 5 && (
+                                        <TouchableOpacity
+                                            style={styles.documentContainer}
+                                            onPress={handleDocumentPick}
+                                        >
+                                            <IconButton icon="file-upload" size={24} />
+                                            <Text>Add Document</Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
