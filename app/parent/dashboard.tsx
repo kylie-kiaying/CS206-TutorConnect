@@ -35,6 +35,8 @@ import { useRouter } from "expo-router";
 import { LineChart, BarChart } from "react-native-chart-kit";
 import NotificationsBell from '../../components/NotificationsBell';
 import ImageModal from '../../components/ImageModal';
+import Slider from '@react-native-community/slider';
+import { LinearGradient } from 'expo-linear-gradient';
 
 
 // Custom theme with better dark mode colors
@@ -134,6 +136,36 @@ type ClassNotes = {
   classId: string;
   className: string;
   weeklyNotes: WeeklyNotes[];
+};
+
+// Add these type and mapping near the top of the file with other types
+type EngagementLevel = "Highly Engaged" | "Engaged" | "Neutral" | "Distracted" | "Unattentive";
+
+const engagementLevelMap = {
+    'Unattentive': 1,
+    'Distracted': 2,
+    'Neutral': 3,
+    'Engaged': 4,
+    'Highly Engaged': 5,
+} as const;
+
+// Add these helper functions before the component
+const engagementLevelToNumber = (level: EngagementLevel): number => {
+    return engagementLevelMap[level];
+};
+
+// Add this type mapping near the top with other type mappings
+const understandingLevelMap = {
+    'Poor': 1,
+    'Needs Improvement': 2,
+    'Fair': 3,
+    'Good': 4,
+    'Excellent': 5,
+} as const;
+
+// Add this helper function near the other helper functions
+const understandingLevelToNumber = (level: string): number => {
+    return understandingLevelMap[level as keyof typeof understandingLevelMap];
 };
 
 export default function ParentScreen() {
@@ -1340,21 +1372,28 @@ export default function ParentScreen() {
                                             {selectedNote.engagement_level}
                                         </Text>
                                     </View>
-                                    <View style={styles.progressContainer}>
-                                        <ProgressBar
-                                            progress={engagementMap[selectedNote.engagement_level] / 5}
-                                            color={
-                                                selectedNote.engagement_level === 'Highly Engaged' ? '#4CAF50' :
-                                                selectedNote.engagement_level === 'Engaged' ? '#FFB700' :
-                                                selectedNote.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
-                                            }
-                                            style={styles.progressBar}
+                                    <View style={styles.sliderContainer}>
+                                        <LinearGradient
+                                            colors={['#FF4B4B', '#FFB700', '#4CAF50']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={[styles.sliderTrack, { position: 'absolute', width: '100%' }]}
+                                        />
+                                        <Slider
+                                            style={styles.slider}
+                                            minimumValue={1}
+                                            maximumValue={5}
+                                            step={1}
+                                            value={engagementLevelToNumber(selectedNote.engagement_level)}
+                                            minimumTrackTintColor="transparent"
+                                            maximumTrackTintColor="transparent"
+                                            thumbTintColor="#2196F3"
                                         />
                                     </View>
                                     <View style={styles.sliderLabels}>
-                                        <Text style={[styles.sliderLabel, styles.sliderLabelStart]}>Unattentive</Text>
-                                        <Text style={styles.sliderLabel}>Neutral</Text>
-                                        <Text style={[styles.sliderLabel, styles.sliderLabelEnd]}>Highly Engaged</Text>
+                                        <Text style={[styles.sliderLabel, styles.sliderLabelStart]}>Poor</Text>
+                                        <Text style={styles.sliderLabel}>Fair</Text>
+                                        <Text style={[styles.sliderLabel, styles.sliderLabelEnd]}>Excellent</Text>
                                     </View>
                                 </View>
 
@@ -1363,15 +1402,15 @@ export default function ParentScreen() {
                                     <View style={[styles.levelBadge, {
                                         backgroundColor: selectedNote.understanding_level === 'Excellent' ? 'rgba(76, 175, 80, 0.1)' :
                                             selectedNote.understanding_level === 'Good' ? 'rgba(255, 183, 0, 0.1)' :
-                                                selectedNote.understanding_level === 'Fair' ? 'rgba(255, 167, 38, 0.1)' : 'rgba(255, 75, 75, 0.1)',
+                                                selectedNote.understanding_level === 'Fair' ? 'rgba(128, 128, 128, 0.1)' : 'rgba(255, 75, 75, 0.1)',
                                         borderColor: selectedNote.understanding_level === 'Excellent' ? '#4CAF50' :
                                             selectedNote.understanding_level === 'Good' ? '#FFB700' :
-                                                selectedNote.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B'
+                                                selectedNote.understanding_level === 'Fair' ? '#808080' : '#FF4B4B'
                                     }]}>
                                         <Text style={[styles.detailValue, {
                                             color: selectedNote.understanding_level === 'Excellent' ? '#4CAF50' :
                                                 selectedNote.understanding_level === 'Good' ? '#FFB700' :
-                                                    selectedNote.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B',
+                                                    selectedNote.understanding_level === 'Fair' ? '#808080' : '#FF4B4B',
                                             textAlign: 'center',
                                             marginBottom: 4,
                                             fontSize: 16,
@@ -1380,15 +1419,22 @@ export default function ParentScreen() {
                                             {selectedNote.understanding_level}
                                         </Text>
                                     </View>
-                                    <View style={styles.progressContainer}>
-                                        <ProgressBar
-                                            progress={understandingMap[selectedNote.understanding_level] / 5}
-                                            color={
-                                                selectedNote.understanding_level === 'Excellent' ? '#4CAF50' :
-                                                selectedNote.understanding_level === 'Good' ? '#FFB700' :
-                                                selectedNote.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B'
-                                            }
-                                            style={styles.progressBar}
+                                    <View style={styles.sliderContainer}>
+                                        <LinearGradient
+                                            colors={['#FF4B4B', '#FFB700', '#4CAF50']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={[styles.sliderTrack, { position: 'absolute', width: '100%' }]}
+                                        />
+                                        <Slider
+                                            style={styles.slider}
+                                            minimumValue={1}
+                                            maximumValue={5}
+                                            step={1}
+                                            value={understandingLevelToNumber(selectedNote.understanding_level)}
+                                            minimumTrackTintColor="transparent"
+                                            maximumTrackTintColor="transparent"
+                                            thumbTintColor="#2196F3"
                                         />
                                     </View>
                                     <View style={styles.sliderLabels}>
@@ -1900,6 +1946,20 @@ const styles = StyleSheet.create({
   progressBar: {
     height: 8,
     borderRadius: 4,
+  },
+  sliderContainer: {
+    marginTop: 8,
+    height: 40,
+    justifyContent: 'center',
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderTrack: {
+    height: 4,
+    borderRadius: 2,
+    top: 18,
   },
   sliderLabels: {
     flexDirection: 'row',
