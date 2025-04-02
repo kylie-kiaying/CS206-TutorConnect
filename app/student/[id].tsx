@@ -181,13 +181,12 @@ const styles = StyleSheet.create({
     modalContent: {
         backgroundColor: 'white',
         margin: 20,
-        marginHorizontal: 40,
         borderRadius: 8,
         overflow: 'hidden',
         maxHeight: Platform.OS === 'web' ? '80%' : '90%',
-        maxWidth: 600,
+        maxWidth: 500,
         alignSelf: 'center',
-        width: '100%',
+        width: '90%',
     },
     modalContainer: {
         height: '100%',
