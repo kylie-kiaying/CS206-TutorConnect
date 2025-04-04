@@ -25,7 +25,7 @@ import {
   ProgressBar,
 } from "react-native-paper";
 import {
-  getSessionNotesByCode,
+  getSessionNotes,
   updateSessionNote,
 } from "../../lib/sessionNotes";
 import { supabase } from "../../lib/supabase";
@@ -182,6 +182,9 @@ export default function ParentScreen() {
   const [sessionNotes, setSessionNotes] = useState<SessionNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
   
+  // Subject filter state
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  
   // Add student modal states
   const [addStudentModalVisible, setAddStudentModalVisible] = useState(false);
   const [studentCode, setStudentCode] = useState("");
@@ -315,70 +318,9 @@ export default function ParentScreen() {
   const fetchSessionNotes = async (studentId: string) => {
     setLoadingNotes(true);
     try {
-      const notes = await getSessionNotesByCode(await getStudentCode(studentId));
-
-    if (notes) {
-        // Get all unique class IDs
-        const classIds = [...new Set(notes
-          .filter(note => note.class_id)
-          .map(note => note.class_id))];
-
-        // Get all unique topic IDs
-        const topicIds = [...new Set(notes
-          .filter(note => note.topic_id)
-          .map(note => note.topic_id))];
-
-        if (classIds.length > 0) {
-          // Fetch all classes
-          const { data: classes, error: classError } = await supabase
-            .from('classes')
-            .select('id, name, subject')
-            .in('id', classIds);
-
-          if (classError) {
-            console.error('Error fetching classes:', classError);
-          }
-
-          // Fetch all topics
-          const { data: topics, error: topicError } = await supabase
-            .from('topics')
-            .select('id, name, class_id')
-            .in('id', topicIds);
-
-          if (topicError) {
-            console.error('Error fetching topics:', topicError);
-          }
-
-          if (classes && classes.length > 0) {
-            setAvailableClasses(classes);
-            
-            if (topics && topics.length > 0) {
-              setAvailableTopics(topics);
-            }
-
-            const notesWithSubjects = notes.map(note => {
-              const classInfo = classes.find(c => c.id === note.class_id);
-              const topicInfo = topics?.find(t => t.id === note.topic_id);
-              
-              return {
-                ...note,
-                subject: classInfo?.subject || classInfo?.name || 'Unknown Class',
-                topic: topicInfo?.name || note.topic || 'Untitled Topic'
-              };
-            });
-
-            setSessionNotes(notesWithSubjects);
-            processAnalyticsData(notesWithSubjects);
-    } else {
-            const notesWithSubjects = notes.map(note => ({
-              ...note,
-              subject: 'Unknown Class'
-            }));
-            setSessionNotes(notesWithSubjects);
-            processAnalyticsData(notesWithSubjects);
-          }
-        }
-    } else {
+      const notes = await getSessionNotes(studentId);
+      if (!notes || notes.length === 0) {
+        console.log("No session notes found for student:", studentId);
         setSessionNotes([]);
         setAnalyticsData({
           dates: [],
@@ -391,11 +333,86 @@ export default function ParentScreen() {
           attendanceRate: 0,
           recentActivity: []
         });
+        return;
+      }
+
+      // Transform notes to match the parent dashboard's SessionNote type
+      const transformedNotes = notes.map(note => ({
+        ...note,
+        date: note.date || note.session_date,
+        subject: note.subject || 'Unknown Class',
+        topic: note.topic || 'Untitled Topic',
+        duration: note.duration || 0,
+        status: note.status || 'completed',
+        objectives: note.objectives || [],
+        tutor: note.tutor || { name: 'Unknown Tutor', subject: 'Unknown Subject' },
+        class_id: note.class_id || undefined,
+        topic_id: note.topic_id || undefined
+      }));
+
+      // Get all unique class IDs
+      const classIds = [...new Set(transformedNotes
+        .filter(note => note.class_id)
+        .map(note => note.class_id))];
+
+      // Get all unique topic IDs
+      const topicIds = [...new Set(transformedNotes
+        .filter(note => note.topic_id)
+        .map(note => note.topic_id))];
+
+      if (classIds.length > 0) {
+        // Fetch all classes
+        const { data: classes, error: classError } = await supabase
+          .from('classes')
+          .select('id, name, subject')
+          .in('id', classIds);
+
+        if (classError) {
+          console.error('Error fetching classes:', classError);
+        }
+
+        // Fetch all topics
+        const { data: topics, error: topicError } = await supabase
+          .from('topics')
+          .select('id, name, class_id')
+          .in('id', topicIds);
+
+        if (topicError) {
+          console.error('Error fetching topics:', topicError);
+        }
+
+        if (classes && classes.length > 0) {
+          setAvailableClasses(classes);
+          
+          if (topics && topics.length > 0) {
+            setAvailableTopics(topics);
+          }
+
+          const notesWithSubjects = transformedNotes.map(note => {
+            const classInfo = classes.find(c => c.id === note.class_id);
+            const topicInfo = topics?.find(t => t.id === note.topic_id);
+            
+            return {
+              ...note,
+              subject: classInfo?.subject || classInfo?.name || 'Unknown Class',
+              topic: topicInfo?.name || note.topic || 'Untitled Topic'
+            };
+          });
+
+          setSessionNotes(notesWithSubjects);
+          processAnalyticsData(notesWithSubjects);
+        } else {
+          setSessionNotes(transformedNotes);
+          processAnalyticsData(transformedNotes);
+        }
+      } else {
+        setSessionNotes(transformedNotes);
+        processAnalyticsData(transformedNotes);
       }
     } catch (error) {
       console.error("Error in fetchSessionNotes:", error);
       setSnackbarMessage("Error loading session notes");
-    setSnackbarVisible(true);
+      setSnackbarVisible(true);
     } finally {
       setLoadingNotes(false);
     }
@@ -708,9 +725,9 @@ export default function ParentScreen() {
         >
           {/* Subject Filter */}
           <ScrollView 
-            horizontal 
+            horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.subjectFilter}
+            contentContainerStyle={styles.subjectFilterContainer}
           >
             <Chip
               selected={selectedSubject === 'all'}
@@ -1084,7 +1101,7 @@ export default function ParentScreen() {
             </TouchableOpacity>
 
             {/* Session notes for selected student */}
-            {selectedStudent && !loadingNotes && (
+            {selectedStudent && (
               <View style={styles.contentContainer}>
                 <View style={styles.tabButtons}>
                   <Button
@@ -1107,81 +1124,120 @@ export default function ParentScreen() {
                   <AnalyticsView data={analyticsData} />
                 ) : (
                   <ScrollView style={styles.listContent}>
-                    {organizeNotesByClassAndWeek(sessionNotes).map((classGroup) => (
-                      <View key={classGroup.classId} style={styles.classCard}>
-                        <View 
-                          style={[
-                            styles.classHeader,
-                            { backgroundColor: getClassHeaderColor(classGroup.classId) }
-                          ]}
-                        >
-                          <Text style={styles.classTitle}>
-                            {availableClasses.find(c => c.id === classGroup.classId)?.name || 'Unknown Class'}
-                          </Text>
-                        </View>
-                        {classGroup.weeklyNotes.map((weekGroup) => {
-                          const monthKey = `${classGroup.classId}-${weekGroup.weekStart}`;
-                          const isCollapsed = collapsedMonths[monthKey];
-                          
-                          return (
-                            <View key={weekGroup.weekStart} style={styles.monthSection}>
-                              <TouchableOpacity 
-                                style={styles.monthHeader}
-                                onPress={() => toggleMonth(monthKey)}
-                              >
-                                <Text style={styles.monthText}>
-                                  {format(new Date(weekGroup.weekStart), "MMMM yyyy")}
-                                </Text>
-                                <Icon 
-                                  source={isCollapsed ? "chevron-right" : "chevron-down"} 
-                                  size={14} 
-                                  color="#A6A6A6" 
-                                />
-                              </TouchableOpacity>
-                              <View style={styles.divider} />
-                              {!isCollapsed && weekGroup.notes.map((note) => (
-                                <TouchableOpacity
-                                  key={note.id}
-                                  style={styles.sessionCard}
-                                  onPress={() => handleViewNoteDetails(note)}
-                                >
-                                  {note.file_url ? (
-                                    <TouchableOpacity onPress={() => handleImagePress(note.file_url!)}>
-                                      <Image
-                                        source={{ uri: note.file_url }}
-                                        style={styles.sessionImage}
-                                      />
-                                    </TouchableOpacity>
-                                  ) : (
-                                    <View style={[styles.sessionImage, styles.noImagePlaceholder]}>
-                                      <Icon source="image-off" size={24} color="#A6A6A6" />
-                                    </View>
-                                  )}
-                                  <View style={styles.sessionContent}>
-                                    <Text style={styles.sessionSubject}>
-                                      {note.topic || 'Untitled Topic'}
-                                    </Text>
-                                    <Text style={styles.sessionDate}>
-                                      {format(new Date(note.session_date), "d MMMM yyyy")}
-                                    </Text>
-                                    <Text style={styles.engagementText}>
-                                      Engagement Level: <Text style={{
-                                        color: note.engagement_level === 'Highly Engaged' ? '#4CAF50' : 
-                                               note.engagement_level === 'Engaged' ? '#FFB700' : 
-                                               note.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
-                                      }}>{note.engagement_level}</Text>
-                                    </Text>
-                                    <Text style={styles.sessionNotes} numberOfLines={2}>
-                                      {note.tutor_notes}
-                                    </Text>
-                                  </View>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          );
-                        })}
+                    <View style={styles.subjectFilter}>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.subjectFilterContainer}
+                      >
+                        {Array.from(new Set(sessionNotes.map(note => note.subject))).map((subject) => (
+                          <Chip
+                            key={subject}
+                            selected={selectedSubject === subject}
+                            onPress={() => setSelectedSubject(subject === selectedSubject ? null : subject)}
+                            style={[
+                              styles.subjectChip,
+                              selectedSubject === subject && styles.subjectChipSelected
+                            ]}
+                            textStyle={styles.subjectChipText}
+                          >
+                            {subject}
+                          </Chip>
+                        ))}
+                      </ScrollView>
+                    </View>
+                    {loadingNotes ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" />
+                        <Text style={{ marginTop: 10, color: theme.colors.text }}>Loading session notes...</Text>
                       </View>
-                    ))}
+                    ) : sessionNotes.length === 0 ? (
+                      <View style={styles.emptyStateContainer}>
+                        <Text style={[styles.emptyStateText, { color: theme.colors.text }]}>
+                          No session notes found for this student.
+                        </Text>
+                      </View>
+                    ) : (
+                      organizeNotesByClassAndWeek(
+                        selectedSubject 
+                          ? sessionNotes.filter(note => note.subject === selectedSubject)
+                          : sessionNotes
+                      ).map((classGroup) => (
+                        <View key={classGroup.classId} style={styles.classCard}>
+                          <View 
+                            style={[
+                              styles.classHeader,
+                              { backgroundColor: getClassHeaderColor(classGroup.classId) }
+                            ]}
+                          >
+                            <Text style={styles.classTitle}>
+                              {availableClasses.find(c => c.id === classGroup.classId)?.name || 'Unknown Class'}
+                            </Text>
+                          </View>
+                          {classGroup.weeklyNotes.map((weekGroup) => {
+                            const monthKey = `${classGroup.classId}-${weekGroup.weekStart}`;
+                            const isCollapsed = collapsedMonths[monthKey];
+                            
+                            return (
+                              <View key={weekGroup.weekStart} style={styles.monthSection}>
+                                <TouchableOpacity 
+                                  style={styles.monthHeader}
+                                  onPress={() => toggleMonth(monthKey)}
+                                >
+                                  <Text style={styles.monthText}>
+                                    {format(new Date(weekGroup.weekStart), "MMMM yyyy")}
+                                  </Text>
+                                  <Icon 
+                                    source={isCollapsed ? "chevron-right" : "chevron-down"} 
+                                    size={14} 
+                                    color="#A6A6A6" 
+                                  />
+                                </TouchableOpacity>
+                                <View style={styles.divider} />
+                                {!isCollapsed && weekGroup.notes.map((note) => (
+                                  <TouchableOpacity
+                                    key={note.id}
+                                    style={styles.sessionCard}
+                                    onPress={() => handleViewNoteDetails(note)}
+                                  >
+                                    {note.file_url ? (
+                                      <TouchableOpacity onPress={() => handleImagePress(note.file_url!)}>
+                                        <Image
+                                          source={{ uri: note.file_url }}
+                                          style={styles.sessionImage}
+                                        />
+                                      </TouchableOpacity>
+                                    ) : (
+                                      <View style={[styles.sessionImage, styles.noImagePlaceholder]}>
+                                        <Icon source="image-off" size={24} color="#A6A6A6" />
+                                      </View>
+                                    )}
+                                    <View style={styles.sessionContent}>
+                                      <Text style={styles.sessionSubject}>
+                                        {note.topic || 'Untitled Topic'}
+                                      </Text>
+                                      <Text style={styles.sessionDate}>
+                                        {format(new Date(note.session_date), "d MMMM yyyy")}
+                                      </Text>
+                                      <Text style={styles.engagementText}>
+                                        Engagement Level: <Text style={{
+                                          color: note.engagement_level === 'Highly Engaged' ? '#4CAF50' : 
+                                                 note.engagement_level === 'Engaged' ? '#FFB700' : 
+                                                 note.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
+                                        }}>{note.engagement_level}</Text>
+                                      </Text>
+                                      <Text style={styles.sessionNotes} numberOfLines={2}>
+                                        {note.tutor_notes}
+                                      </Text>
+                                    </View>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ))
+                    )}
                   </ScrollView>
                 )}
               </View>
@@ -1791,6 +1847,10 @@ const styles = StyleSheet.create({
   },
   subjectFilter: {
     marginBottom: 16,
+  },
+  subjectFilterContainer: {
+    paddingHorizontal: 8,
+    paddingBottom: 8,
   },
   subjectChip: {
     marginRight: 8,
