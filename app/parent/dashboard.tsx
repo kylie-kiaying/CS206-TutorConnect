@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ScrollView, StyleSheet, View, FlatList, useColorScheme, Dimensions, TouchableOpacity, Image } from "react-native";
+import { ScrollView, StyleSheet, View, FlatList, useColorScheme, Dimensions, TouchableOpacity, Image, Platform } from "react-native";
 import {
   TextInput,
   Button,
@@ -21,6 +21,8 @@ import {
   Text,
   Chip,
   Icon,
+  IconButton,
+  ProgressBar,
 } from "react-native-paper";
 import {
   getSessionNotesByCode,
@@ -33,6 +35,8 @@ import { useRouter } from "expo-router";
 import { LineChart, BarChart } from "react-native-chart-kit";
 import NotificationsBell from '../../components/NotificationsBell';
 import ImageModal from '../../components/ImageModal';
+import Slider from '@react-native-community/slider';
+import { LinearGradient } from 'expo-linear-gradient';
 
 
 // Custom theme with better dark mode colors
@@ -62,6 +66,14 @@ const customDarkTheme = {
   }
 };
 
+// Add this type definition near the top with other types
+type FileAttachment = {
+  id: string;
+  url: string;
+  name: string;
+  type: "image" | "pdf" | "document";
+};
+
 export type SessionNote = {
   id: string;
   student_id: string;
@@ -89,6 +101,7 @@ export type SessionNote = {
     name: string;
     subject: string;
   };
+  attachments?: FileAttachment[];
 };
 
 type Student = {
@@ -123,6 +136,36 @@ type ClassNotes = {
   classId: string;
   className: string;
   weeklyNotes: WeeklyNotes[];
+};
+
+// Add these type and mapping near the top of the file with other types
+type EngagementLevel = "Highly Engaged" | "Engaged" | "Neutral" | "Distracted" | "Unattentive";
+
+const engagementLevelMap = {
+    'Unattentive': 1,
+    'Distracted': 2,
+    'Neutral': 3,
+    'Engaged': 4,
+    'Highly Engaged': 5,
+} as const;
+
+// Add these helper functions before the component
+const engagementLevelToNumber = (level: EngagementLevel): number => {
+    return engagementLevelMap[level];
+};
+
+// Add this type mapping near the top with other type mappings
+const understandingLevelMap = {
+    'Poor': 1,
+    'Needs Improvement': 2,
+    'Fair': 3,
+    'Good': 4,
+    'Excellent': 5,
+} as const;
+
+// Add this helper function near the other helper functions
+const understandingLevelToNumber = (level: string): number => {
+    return understandingLevelMap[level as keyof typeof understandingLevelMap];
 };
 
 export default function ParentScreen() {
@@ -836,10 +879,39 @@ export default function ParentScreen() {
     );
   };
 
-  // Add this function
-  const handleViewNoteDetails = (note: SessionNote) => {
-    setSelectedNote(note);
-    setDetailModalVisible(true);
+  // Update the handleViewNoteDetails function
+  const handleViewNoteDetails = async (note: SessionNote) => {
+    try {
+        // Fetch attachments for this session note
+        const { data: attachmentsData, error: attachmentsError } = await supabase
+            .from("session_attachments")
+            .select("id, file_url, file_type, file_name")
+            .eq("session_note_id", note.id);
+
+        if (attachmentsError) {
+            console.error('Error fetching attachments:', attachmentsError);
+            return;
+        }
+
+        // Transform attachments to match the expected format
+        const attachments = attachmentsData?.map(attachment => ({
+            id: attachment.id,
+            url: attachment.file_url,
+            type: attachment.file_type as 'image' | 'pdf' | 'document',
+            name: attachment.file_name
+        })) || [];
+
+        // Set the note with its attachments
+        setSelectedNote({
+            ...note,
+            attachments
+        });
+        setDetailModalVisible(true);
+    } catch (error) {
+        console.error('Error in handleViewNoteDetails:', error);
+        setSnackbarMessage('Error loading session note details');
+        setSnackbarVisible(true);
+    }
   };
 
   // Add this function to organize notes by class and week
@@ -929,6 +1001,23 @@ export default function ParentScreen() {
   const handleImagePress = (imageUrl: string) => {
     setSelectedImage(imageUrl);
     setImageModalVisible(true);
+  };
+
+  // Add this function before the component
+  const handleDocumentDownload = async (url: string, fileName: string) => {
+    try {
+      // Create a temporary anchor element
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName; // Set the download filename
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      setSnackbarMessage('Error downloading document');
+      setSnackbarVisible(true);
+    }
   };
 
   return (
@@ -1155,148 +1244,330 @@ export default function ParentScreen() {
           <Modal
             visible={feedbackModalVisible}
             onDismiss={() => setFeedbackModalVisible(false)}
-            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.surface }]}
+            contentContainerStyle={[styles.modalContent, { padding: 0 }]}
           >
-            <Title style={[styles.modalTitle, { color: theme.colors.text }]}>Parent Feedback</Title>
-            <TextInput
-              label="Your Feedback"
-              value={parentFeedback}
-              onChangeText={setParentFeedback}
-              mode="outlined"
-              theme={theme}
-              multiline
-              style={styles.textAreaInput}
-            />
-            <View style={styles.modalButtons}>
-              <Button
-                onPress={() => setFeedbackModalVisible(false)}
-              >
-                Cancel
-              </Button>
-            <Button
-              mode="contained"
-              onPress={handleSaveFeedback}
-            >
-              Save Feedback
-            </Button>
+            <View style={styles.modalContainer}>
+                {/* Pink Header */}
+                <View style={styles.modalHeader}>
+                    <TouchableOpacity
+                        onPress={() => setFeedbackModalVisible(false)}
+                        style={styles.backButton}
+                    >
+                        <IconButton icon="chevron-left" size={24} />
+                    </TouchableOpacity>
+                    <Text style={styles.modalHeaderTitle}>
+                        {currentNote?.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
+                    </Text>
+                </View>
+
+                <ScrollView style={styles.modalScroll}>
+                    <View style={styles.detailSection}>
+                        <Text style={styles.detailLabel}>Session Topic</Text>
+                        <Text style={styles.detailValue}>
+                            {currentNote?.topic || 'Untitled Topic'}
+                        </Text>
+                    </View>
+
+                    <View style={styles.detailSection}>
+                        <Text style={styles.detailLabel}>Session Date</Text>
+                        <Text style={styles.detailValue}>
+                            {currentNote ? format(new Date(currentNote.session_date), "d MMMM yyyy") : ''}
+                        </Text>
+                    </View>
+
+                    <View style={styles.detailSection}>
+                        <Text style={styles.detailLabel}>Your Feedback</Text>
+                        <TextInput
+                            value={parentFeedback}
+                            onChangeText={setParentFeedback}
+                            mode="outlined"
+                            multiline
+                            numberOfLines={6}
+                            style={[styles.textAreaInput, { backgroundColor: 'white' }]}
+                            placeholder="Enter your feedback about this session..."
+                        />
+                    </View>
+
+                    <View style={styles.detailActions}>
+                        <Button
+                            mode="contained"
+                            onPress={handleSaveFeedback}
+                        >
+                            Save Feedback
+                        </Button>
+                        <Button
+                            onPress={() => setFeedbackModalVisible(false)}
+                        >
+                            Cancel
+                        </Button>
+                    </View>
+                </ScrollView>
             </View>
           </Modal>
         </Portal>
 
-        {/* Add the Detail Modal */}
+        {/* DETAIL VIEW MODAL */}
         <Portal>
-          <Modal
-            visible={detailModalVisible}
-            onDismiss={() => {
-              setDetailModalVisible(false);
-              setSelectedNote(null);
-            }}
-            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.colors.surface }]}
-          >
-            {selectedNote && (
-              <ScrollView>
-                <Title style={[styles.modalTitle, { color: theme.colors.text }]}>
-                  Session Details
-                </Title>
-                
-                <View style={styles.detailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Class</Text>
-                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                    {selectedNote.class_id ? 
-                      availableClasses.find(c => c.id === selectedNote.class_id)?.name || 'Unknown Class' :
-                      selectedNote.subject || 'Unknown Subject'
-                    }
-                  </Text>
+            <Modal
+                visible={detailModalVisible}
+                onDismiss={() => {
+                    setDetailModalVisible(false);
+                    setSelectedNote(null);
+                }}
+                contentContainerStyle={[styles.modalContent, { padding: 0 }]}
+            >
+                <View style={styles.modalContainer}>
+                    {/* Pink Header */}
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setDetailModalVisible(false);
+                                setSelectedNote(null);
+                            }}
+                            style={styles.backButton}
+                        >
+                            <IconButton icon="chevron-left" size={24} />
+                        </TouchableOpacity>
+                        <Text style={styles.modalHeaderTitle}>Session Note Details</Text>
+                    </View>
+
+                    <ScrollView style={styles.modalScroll}>
+                        {selectedNote && (
+                            <>
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Date</Text>
+                                    <Text style={styles.detailValue}>
+                                        {format(new Date(selectedNote.session_date), "d MMMM yyyy")}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Topic</Text>
+                                    <Text style={styles.detailValue}>
+                                        {selectedNote.topic_id ?
+                                            availableTopics.find(t => t.id === selectedNote.topic_id)?.name :
+                                            selectedNote.topic || 'Untitled Topic'}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Engagement Level</Text>
+                                    <View style={[styles.levelBadge, {
+                                        backgroundColor: selectedNote.engagement_level === 'Highly Engaged' ? 'rgba(76, 175, 80, 0.1)' :
+                                            selectedNote.engagement_level === 'Engaged' ? 'rgba(255, 183, 0, 0.1)' :
+                                                selectedNote.engagement_level === 'Neutral' ? 'rgba(128, 128, 128, 0.1)' : 'rgba(255, 75, 75, 0.1)',
+                                        borderColor: selectedNote.engagement_level === 'Highly Engaged' ? '#4CAF50' :
+                                            selectedNote.engagement_level === 'Engaged' ? '#FFB700' :
+                                                selectedNote.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
+                                    }]}>
+                                        <Text style={[styles.detailValue, {
+                                            color: selectedNote.engagement_level === 'Highly Engaged' ? '#4CAF50' :
+                                                selectedNote.engagement_level === 'Engaged' ? '#FFB700' :
+                                                    selectedNote.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B',
+                                            textAlign: 'center',
+                                            marginBottom: 4,
+                                            fontSize: 16,
+                                            fontWeight: '500'
+                                        }]}>
+                                            {selectedNote.engagement_level}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.sliderContainer}>
+                                        <LinearGradient
+                                            colors={['#FF4B4B', '#FFB700', '#4CAF50']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={[styles.sliderTrack, { position: 'absolute', width: '100%' }]}
+                                        />
+                                        <Slider
+                                            style={styles.slider}
+                                            minimumValue={1}
+                                            maximumValue={5}
+                                            step={1}
+                                            value={engagementLevelToNumber(selectedNote.engagement_level)}
+                                            minimumTrackTintColor="transparent"
+                                            maximumTrackTintColor="transparent"
+                                            thumbTintColor="#2196F3"
+                                        />
+                                    </View>
+                                    <View style={styles.sliderLabels}>
+                                        <Text style={[styles.sliderLabel, styles.sliderLabelStart]}>Poor</Text>
+                                        <Text style={styles.sliderLabel}>Fair</Text>
+                                        <Text style={[styles.sliderLabel, styles.sliderLabelEnd]}>Excellent</Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Understanding Level</Text>
+                                    <View style={[styles.levelBadge, {
+                                        backgroundColor: selectedNote.understanding_level === 'Excellent' ? 'rgba(76, 175, 80, 0.1)' :
+                                            selectedNote.understanding_level === 'Good' ? 'rgba(255, 183, 0, 0.1)' :
+                                                selectedNote.understanding_level === 'Fair' ? 'rgba(128, 128, 128, 0.1)' : 'rgba(255, 75, 75, 0.1)',
+                                        borderColor: selectedNote.understanding_level === 'Excellent' ? '#4CAF50' :
+                                            selectedNote.understanding_level === 'Good' ? '#FFB700' :
+                                                selectedNote.understanding_level === 'Fair' ? '#808080' : '#FF4B4B'
+                                    }]}>
+                                        <Text style={[styles.detailValue, {
+                                            color: selectedNote.understanding_level === 'Excellent' ? '#4CAF50' :
+                                                selectedNote.understanding_level === 'Good' ? '#FFB700' :
+                                                    selectedNote.understanding_level === 'Fair' ? '#808080' : '#FF4B4B',
+                                            textAlign: 'center',
+                                            marginBottom: 4,
+                                            fontSize: 16,
+                                            fontWeight: '500'
+                                        }]}>
+                                            {selectedNote.understanding_level}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.sliderContainer}>
+                                        <LinearGradient
+                                            colors={['#FF4B4B', '#FFB700', '#4CAF50']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={[styles.sliderTrack, { position: 'absolute', width: '100%' }]}
+                                        />
+                                        <Slider
+                                            style={styles.slider}
+                                            minimumValue={1}
+                                            maximumValue={5}
+                                            step={1}
+                                            value={understandingLevelToNumber(selectedNote.understanding_level)}
+                                            minimumTrackTintColor="transparent"
+                                            maximumTrackTintColor="transparent"
+                                            thumbTintColor="#2196F3"
+                                        />
+                                    </View>
+                                    <View style={styles.sliderLabels}>
+                                        <Text style={[styles.sliderLabel, styles.sliderLabelStart]}>Poor</Text>
+                                        <Text style={styles.sliderLabel}>Fair</Text>
+                                        <Text style={[styles.sliderLabel, styles.sliderLabelEnd]}>Excellent</Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Lesson Summary</Text>
+                                    <Text style={styles.detailValue}>
+                                        {selectedNote.lesson_summary || (
+                                            <Text style={styles.emptyStateText}>No lesson summary provided</Text>
+                                        )}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Homework Assigned</Text>
+                                    <Text style={styles.detailValue}>
+                                        {selectedNote.homework_assigned || (
+                                            <Text style={styles.emptyStateText}>No homework assigned</Text>
+                                        )}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Tutor Notes</Text>
+                                    <Text style={styles.detailValue}>
+                                        {selectedNote.tutor_notes || (
+                                            <Text style={styles.emptyStateText}>No tutor notes provided</Text>
+                                        )}
+                                    </Text>
+                                </View>
+
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Parent Feedback</Text>
+                                    <Text style={styles.detailValue}>
+                                        {selectedNote.parent_feedback || (
+                                            <Text style={styles.emptyStateText}>No parent feedback provided</Text>
+                                        )}
+                                    </Text>
+                                </View>
+
+                                {/* Images Section */}
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Images</Text>
+                                    <View style={styles.attachmentsGrid}>
+                                        {selectedNote.attachments && selectedNote.attachments
+                                            .filter(attachment => attachment.type === 'image')
+                                            .length > 0 ? (
+                                            selectedNote.attachments
+                                                .filter(attachment => attachment.type === 'image')
+                                                .map((attachment, index) => (
+                                                    <TouchableOpacity
+                                                        key={attachment.id || index}
+                                                        onPress={() => handleImagePress(attachment.url)}
+                                                        style={styles.attachmentImage}
+                                                    >
+                                                        <Image
+                                                            source={{ uri: attachment.url }}
+                                                            style={styles.attachmentImage}
+                                                        />
+                                                    </TouchableOpacity>
+                                                ))
+                                        ) : (
+                                            <Text style={styles.emptyStateText}>No images attached to this session note</Text>
+                                        )}
+                                    </View>
+                                </View>
+
+                                {/* Documents Section */}
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.detailLabel}>Documents</Text>
+                                    <View style={styles.documentsGrid}>
+                                        {selectedNote.attachments && selectedNote.attachments
+                                            .filter(attachment => attachment.type === 'pdf' || attachment.type === 'document')
+                                            .length > 0 ? (
+                                            selectedNote.attachments
+                                                .filter(attachment => attachment.type === 'pdf' || attachment.type === 'document')
+                                                .map((attachment, index) => (
+                                                    <TouchableOpacity
+                                                        key={attachment.id || index}
+                                                        style={styles.documentItem}
+                                                        onPress={() => handleDocumentDownload(attachment.url, attachment.name)}
+                                                    >
+                                                        <View style={styles.documentIconContainer}>
+                                                            <Icon
+                                                                source={attachment.type === 'pdf' ? 'file-pdf-box' : 'file-document'}
+                                                                size={24}
+                                                                color="#666"
+                                                            />
+                                                        </View>
+                                                        <Text style={styles.documentTitle} numberOfLines={2}>
+                                                            {attachment.name}
+                                                        </Text>
+                                                        <Text style={styles.documentType}>
+                                                            {attachment.type.toUpperCase()}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))
+                                        ) : (
+                                            <Text style={styles.emptyStateText}>No documents attached to this session note</Text>
+                                        )}
+                                    </View>
+                                </View>
+
+                                <View style={styles.detailActions}>
+                                    <Button
+                                        mode="contained"
+                                        onPress={() => {
+                                            setDetailModalVisible(false);
+                                            handleOpenFeedbackModal(selectedNote);
+                                        }}
+                                    >
+                                        {selectedNote.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
+                                    </Button>
+                                    <Button
+                                        onPress={() => {
+                                            setDetailModalVisible(false);
+                                            setSelectedNote(null);
+                                        }}
+                                        style={styles.closeButton}
+                                    >
+                                        Close
+                                    </Button>
+                                </View>
+                            </>
+                        )}
+                    </ScrollView>
                 </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Topic</Text>
-                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                    {selectedNote.topic_id ? 
-                      availableTopics.find(t => t.id === selectedNote.topic_id)?.name : 
-                      selectedNote.topic || 'N/A'
-                    }
-                  </Text>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Date</Text>
-                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                    {format(new Date(selectedNote.session_date), "PPP")}
-                  </Text>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Engagement Level</Text>
-                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                    {selectedNote.engagement_level}
-                  </Text>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Topic Understanding</Text>
-                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                    {selectedNote.understanding_level}
-                  </Text>
-                </View>
-
-                {selectedNote.homework_assigned && (
-                  <View style={styles.detailSection}>
-                    <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Homework</Text>
-                    <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                      {selectedNote.homework_assigned}
-                    </Text>
-                  </View>
-                )}
-
-                {selectedNote.tutor_notes && (
-                  <View style={styles.detailSection}>
-                    <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Tutor Notes</Text>
-                    <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                      {selectedNote.tutor_notes}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.detailSection}>
-                  <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Parent Feedback</Text>
-                  <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                    {selectedNote.parent_feedback || 'No feedback provided yet.'}
-                  </Text>
-                </View>
-
-                {selectedNote.assignment_completion !== undefined && (
-                  <View style={styles.detailSection}>
-                    <Text style={[styles.detailLabel, { color: theme.colors.text }]}>Assignment Completion</Text>
-                    <Text style={[styles.detailText, { color: theme.colors.primary }]}>
-                      {selectedNote.assignment_completion}%
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.modalButtons}>
-            <Button
-                    mode="contained"
-                    onPress={() => {
-                      setDetailModalVisible(false);
-                      handleOpenFeedbackModal(selectedNote);
-                    }}
-                  >
-                    {selectedNote.parent_feedback ? 'Edit Feedback' : 'Add Feedback'}
-            </Button>
-            <Button
-                    onPress={() => {
-                      setDetailModalVisible(false);
-                      setSelectedNote(null);
-                    }}
-                    style={styles.closeButton}
-                  >
-                    Close
-            </Button>
-                </View>
-              </ScrollView>
-            )}
-          </Modal>
+            </Modal>
         </Portal>
 
         {/* Snackbar for notifications */}
@@ -1426,13 +1697,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   textAreaInput: {
-    marginBottom: 16,
-    height: 100,
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 22,
+    minHeight: 120,
   },
   modalContent: {
-    padding: 20,
+    backgroundColor: 'white',
     margin: 20,
     borderRadius: 8,
+    overflow: 'hidden',
+    maxHeight: Platform.OS === 'web' ? '80%' : '90%',
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '90%',
   },
   modalTitle: {
     marginBottom: 8,
@@ -1459,8 +1737,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   emptyStateText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
     textAlign: 'center',
-    marginBottom: 20,
+    padding: 8,
   },
   addFirstStudentButton: {
     marginTop: 20,
@@ -1557,17 +1838,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   detailSection: {
-    marginBottom: 16,
+    marginBottom: 24,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
   },
   detailLabel: {
     fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 4,
-    opacity: 0.7,
+    fontWeight: '500',
+    marginBottom: 8,
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  detailText: {
-    fontSize: 16,
-    lineHeight: 24,
+  detailValue: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#333',
   },
   closeButton: {
     marginTop: 8,
@@ -1620,5 +1907,129 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     marginBottom: 4,
+  },
+  modalContainer: {
+    height: '100%',
+    backgroundColor: 'white',
+    flexDirection: 'column' as const,
+  },
+  modalHeader: {
+    backgroundColor: '#FFE4E4',
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
+  },
+  backButton: {
+    marginRight: 8,
+  },
+  modalScroll: {
+    padding: 24,
+    paddingHorizontal: 32,
+    flex: 1,
+  },
+  levelBadge: {
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+    alignSelf: 'center',
+    minWidth: 120,
+  },
+  progressContainer: {
+    marginVertical: 16,
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+  },
+  sliderContainer: {
+    marginTop: 8,
+    height: 40,
+    justifyContent: 'center',
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderTrack: {
+    height: 4,
+    borderRadius: 2,
+    top: 18,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+    marginTop: 8,
+    width: '100%',
+  },
+  sliderLabel: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  sliderLabelStart: {
+    textAlign: 'left',
+  },
+  sliderLabelEnd: {
+    textAlign: 'right',
+  },
+  attachmentsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  attachmentImage: {
+    width: 150,
+    height: 150,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+  },
+  documentsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  documentItem: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  documentIconContainer: {
+    marginBottom: 8,
+    backgroundColor: '#F5F5F5',
+    padding: 8,
+    borderRadius: 8,
+  },
+  documentTitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    color: '#333',
+    marginBottom: 4,
+  },
+  documentType: {
+    fontSize: 11,
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    marginBottom: 16,
+    paddingHorizontal: 16,
   },
 });
