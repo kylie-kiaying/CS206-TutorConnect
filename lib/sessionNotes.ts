@@ -304,17 +304,60 @@ export const deleteSessionNote = async (id: string) => {
 };
 
 export async function getSessionNotesByCode(code: string) {
-  const { data, error } = await supabase
-    .from("session_notes")
-    .select("*")
-    .eq("student_id", (await getStudentIdByCode(code)) || "");
-
-  if (error) {
-    console.error("Error fetching session notes:", error);
+  const studentId = await getStudentIdByCode(code);
+  if (!studentId) {
+    console.error("No student ID found for code:", code);
     return null;
   }
 
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from("session_notes")
+      .select(`
+        *,
+        class:classes (
+          id,
+          name,
+          subject
+        ),
+        topic:topics (
+          id,
+          name
+        )
+      `)
+      .eq("student_id", studentId)
+      .order("session_date", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching session notes:", error);
+      return null;
+    }
+
+    if (!data) {
+      console.log("No session notes found for student:", studentId);
+      return [];
+    }
+
+    // Transform the data to match the expected format
+    const transformedNotes = (data || []).map(note => {
+      const transformedNote = {
+        ...note,
+        subject: note.class?.subject || note.class?.name || 'Unknown Class',
+        topic: note.topic?.name || note.topic || 'Untitled Topic',
+        class_id: note.class?.id || null,
+        topic_id: note.topic?.id || null,
+        attachments: [] // Initialize empty attachments array - we'll fetch these separately
+      };
+      
+      return transformedNote;
+    });
+
+    console.log(`Successfully fetched ${transformedNotes.length} session notes for student ${studentId}`);
+    return transformedNotes;
+  } catch (error) {
+    console.error("Error in getSessionNotesByCode:", error);
+    return null;
+  }
 }
 
 async function getStudentIdByCode(code: string): Promise<string | null> {

@@ -10,6 +10,9 @@ export default function NotificationsBell() {
   const { notifications, unreadCount, markAsRead } = useNotifications();
   const router = useRouter();
 
+  // Filter to only show unread notifications
+  const unreadNotifications = notifications.filter(n => !n.is_read);
+
   const handleNotificationPress = async (notification: any) => {
     await markAsRead(notification.id);
     
@@ -91,10 +94,10 @@ export default function NotificationsBell() {
           </View>
           
           <List.Section>
-            {notifications.length === 0 ? (
-              <Text style={styles.emptyText}>No notifications</Text>
+            {unreadNotifications.length === 0 ? (
+              <Text style={styles.emptyText}>No unread notifications</Text>
             ) : (
-              notifications.map((notification) => (
+              unreadNotifications.map((notification) => (
                 <List.Item
                   key={notification.id}
                   title={notification.message}
@@ -106,10 +109,7 @@ export default function NotificationsBell() {
                     />
                   )}
                   onPress={() => handleNotificationPress(notification)}
-                  style={[
-                    styles.notificationItem,
-                    !notification.is_read && styles.unreadNotification
-                  ]}
+                  style={styles.notificationItem}
                 />
               ))
             )}
@@ -142,9 +142,6 @@ const styles = StyleSheet.create({
   notificationItem: {
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-  },
-  unreadNotification: {
-    backgroundColor: '#f0f9ff',
   },
   emptyText: {
     textAlign: 'center',
