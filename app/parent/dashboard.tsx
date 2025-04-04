@@ -182,6 +182,9 @@ export default function ParentScreen() {
   const [sessionNotes, setSessionNotes] = useState<SessionNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
   
+  // Subject filter state
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  
   // Add student modal states
   const [addStudentModalVisible, setAddStudentModalVisible] = useState(false);
   const [studentCode, setStudentCode] = useState("");
@@ -722,9 +725,9 @@ export default function ParentScreen() {
         >
           {/* Subject Filter */}
           <ScrollView 
-            horizontal 
+            horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.subjectFilter}
+            contentContainerStyle={styles.subjectFilterContainer}
           >
             <Chip
               selected={selectedSubject === 'all'}
@@ -1121,6 +1124,28 @@ export default function ParentScreen() {
                   <AnalyticsView data={analyticsData} />
                 ) : (
                   <ScrollView style={styles.listContent}>
+                    <View style={styles.subjectFilter}>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.subjectFilterContainer}
+                      >
+                        {Array.from(new Set(sessionNotes.map(note => note.subject))).map((subject) => (
+                          <Chip
+                            key={subject}
+                            selected={selectedSubject === subject}
+                            onPress={() => setSelectedSubject(subject === selectedSubject ? null : subject)}
+                            style={[
+                              styles.subjectChip,
+                              selectedSubject === subject && styles.subjectChipSelected
+                            ]}
+                            textStyle={styles.subjectChipText}
+                          >
+                            {subject}
+                          </Chip>
+                        ))}
+                      </ScrollView>
+                    </View>
                     {loadingNotes ? (
                       <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" />
@@ -1133,7 +1158,11 @@ export default function ParentScreen() {
                         </Text>
                       </View>
                     ) : (
-                      organizeNotesByClassAndWeek(sessionNotes).map((classGroup) => (
+                      organizeNotesByClassAndWeek(
+                        selectedSubject 
+                          ? sessionNotes.filter(note => note.subject === selectedSubject)
+                          : sessionNotes
+                      ).map((classGroup) => (
                         <View key={classGroup.classId} style={styles.classCard}>
                           <View 
                             style={[
@@ -1818,6 +1847,10 @@ const styles = StyleSheet.create({
   },
   subjectFilter: {
     marginBottom: 16,
+  },
+  subjectFilterContainer: {
+    paddingHorizontal: 8,
+    paddingBottom: 8,
   },
   subjectChip: {
     marginRight: 8,
