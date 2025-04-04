@@ -1098,7 +1098,7 @@ export default function ParentScreen() {
             </TouchableOpacity>
 
             {/* Session notes for selected student */}
-            {selectedStudent && !loadingNotes && (
+            {selectedStudent && (
               <View style={styles.contentContainer}>
                 <View style={styles.tabButtons}>
                   <Button
@@ -1121,7 +1121,12 @@ export default function ParentScreen() {
                   <AnalyticsView data={analyticsData} />
                 ) : (
                   <ScrollView style={styles.listContent}>
-                    {sessionNotes.length === 0 ? (
+                    {loadingNotes ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" />
+                        <Text style={{ marginTop: 10, color: theme.colors.text }}>Loading session notes...</Text>
+                      </View>
+                    ) : sessionNotes.length === 0 ? (
                       <View style={styles.emptyStateContainer}>
                         <Text style={[styles.emptyStateText, { color: theme.colors.text }]}>
                           No session notes found for this student.
