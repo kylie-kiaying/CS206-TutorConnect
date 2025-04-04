@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { IconButton, Badge, Portal, Modal, List, Text, Button } from 'react-native-paper';
+import { IconButton, Badge, Portal, Modal, List, Text, Button, Surface } from 'react-native-paper';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { useRouter } from 'expo-router';
 import { format } from 'date-fns';
@@ -12,6 +12,9 @@ export default function NotificationsBell() {
 
   // Filter to only show unread notifications
   const unreadNotifications = notifications.filter(n => !n.is_read);
+  
+  // Find weekly reminders specifically
+  const weeklyReminders = unreadNotifications.filter(n => n.type === 'weekly_reminder');
 
   const handleNotificationPress = async (notification: any) => {
     await markAsRead(notification.id);
@@ -65,6 +68,12 @@ export default function NotificationsBell() {
     }
   };
 
+  const handleAddSessionNotes = () => {
+    // Navigate to the tutor dashboard
+    router.push('/tutor/dashboard');
+    setVisible(false);
+  };
+
   return (
     <>
       <IconButton
@@ -93,6 +102,23 @@ export default function NotificationsBell() {
             <Button onPress={() => setVisible(false)}>Close</Button>
           </View>
           
+          {/* Weekly Reminders Banner */}
+          {weeklyReminders.length > 0 && (
+            <Surface style={styles.reminderBanner} elevation={2}>
+              <Text style={styles.reminderTitle}>Weekly Session Notes Reminder</Text>
+              <Text style={styles.reminderText}>
+                Please add your session notes for this week to keep track of student progress.
+              </Text>
+              <Button 
+                mode="contained" 
+                onPress={handleAddSessionNotes}
+                style={styles.reminderButton}
+              >
+                Add Session Notes
+              </Button>
+            </Surface>
+          )}
+          
           <List.Section>
             {unreadNotifications.length === 0 ? (
               <Text style={styles.emptyText}>No unread notifications</Text>
@@ -109,7 +135,10 @@ export default function NotificationsBell() {
                     />
                   )}
                   onPress={() => handleNotificationPress(notification)}
-                  style={styles.notificationItem}
+                  style={[
+                    styles.notificationItem,
+                    notification.type === 'weekly_reminder' && styles.reminderItem
+                  ]}
                 />
               ))
             )}
@@ -143,9 +172,31 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  reminderItem: {
+    backgroundColor: '#f0f8ff',
+  },
   emptyText: {
     textAlign: 'center',
     marginTop: 20,
     color: '#666',
+  },
+  reminderBanner: {
+    backgroundColor: '#e3f2fd',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  reminderTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#1565c0',
+  },
+  reminderText: {
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  reminderButton: {
+    alignSelf: 'flex-start',
   },
 }); 
