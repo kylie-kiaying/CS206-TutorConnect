@@ -52,6 +52,22 @@ export const getSessionsByStudentId = async (studentId: string): Promise<Session
   return data || [];
 };
 
+// Check if a student code already exists
+async function codeExists(code: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("student_codes")
+    .select("id")
+    .eq("code", code)
+    .single();
+    
+  if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+    console.error("Error checking if code exists:", error);
+    return false;
+  }
+  
+  return !!data;
+}
+
 // Add a new student with initial sessions
 export async function addStudent(
   studentData: Omit<Student, "id">, 
@@ -71,7 +87,22 @@ export async function addStudent(
   const newStudent = data[0];
 
   // Generate a unique student code
-  const studentCode = generateStudentCode();
+  let studentCode = generateStudentCode();
+  let attempts = 0;
+  const maxAttempts = 5;
+  
+  // Try to generate a unique code
+  while (attempts < maxAttempts) {
+    if (!(await codeExists(studentCode))) {
+      break;
+    }
+    studentCode = generateStudentCode();
+    attempts++;
+  }
+  
+  if (attempts >= maxAttempts) {
+    console.error("Failed to generate a unique student code after", maxAttempts, "attempts");
+  }
 
   // Insert the student code into the student_codes table
   const { error: codeError } = await supabase
@@ -80,7 +111,10 @@ export async function addStudent(
 
   if (codeError) {
     console.error("Error adding student code:", codeError);
-    return null;
+    console.error("Student ID:", newStudent.id);
+    console.error("Generated Code:", studentCode);
+    // Don't return null here, continue with the student creation
+    // The code might still be added later
   }
 
   // Add sessions if provided
@@ -104,8 +138,10 @@ export async function addStudent(
 }
 
 function generateStudentCode() {
-  // Implement a logic to generate a unique student code
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  // Create a more unique code by combining random string with timestamp
+  const timestamp = Date.now().toString(36).substring(2, 6);
+  const random = Math.random().toString(36).substring(2, 6);
+  return `${timestamp}${random}`.toUpperCase();
 }
 
 // Delete student (will cascade delete sessions)
