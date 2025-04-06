@@ -198,8 +198,8 @@ export default function TutorDashboard() {
         .from('classes')
         .select(`
           *,
-          class_students!inner (
-            count
+          class_students (
+            student_id
           )
         `)
         .eq('tutor_id', user.id)
@@ -211,7 +211,7 @@ export default function TutorDashboard() {
       const transformedData = (data || []).map(classItem => ({
         ...classItem,
         class_students: [{
-          count: classItem.class_students?.[0]?.count || 0
+          count: classItem.class_students?.length || 0
         }]
       }));
 
@@ -291,18 +291,18 @@ export default function TutorDashboard() {
 
     if (newName.trim()) {
       try {
-        // Insert the student
-        const { data, error } = await supabase
-          .from("students")
-          .insert([
-            {
-              tutor_id: tutorId,
-              name: newName.trim(),
-            },
-          ])
-          .select();
+        // Use the addStudent function which properly generates a student code
+        const newStudent = await addStudent(
+          {
+            tutor_id: tutorId,
+            name: newName.trim(),
+          },
+          [] // Empty array since we don't use sessions anymore
+        );
 
-        if (error) throw error;
+        if (!newStudent) {
+          throw new Error("Failed to create student");
+        }
 
         // Refresh students list
         fetchStudents(tutorId);
