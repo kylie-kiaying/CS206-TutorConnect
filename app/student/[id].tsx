@@ -647,6 +647,29 @@ const styles = StyleSheet.create({
         alignSelf: 'center',
         minWidth: 120,
     },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+        marginTop: 40,
+    },
+    emptyText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginTop: 16,
+    },
+    emptySubtext: {
+        fontSize: 14,
+        textAlign: 'center',
+        marginTop: 8,
+    },
 });
 
 const pickerSelectStyles = {
@@ -830,6 +853,7 @@ export default function StudentView() {
 
     const { id } = useLocalSearchParams<{ id: string }>(); // Get student ID from URL
     const router = useRouter();
+    const [loading, setLoading] = useState(true);
     const [sessionNotes, setSessionNotes] = useState<SessionNote[]>([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [filteredNotes, setFilteredNotes] = useState<SessionNote[]>([]);
@@ -910,7 +934,7 @@ export default function StudentView() {
         fetchSessionNotes();
         fetchAvailableClasses();
         fetchStudentName();
-    }, []);
+    }, [id]);
 
     useEffect(() => {
         // Initialize all months as collapsed when session notes change
@@ -959,6 +983,7 @@ export default function StudentView() {
             return;
         }
 
+        setLoading(true);
         try {
             const data = await getSessionNotes(id);
             if (!data) {
@@ -1002,6 +1027,8 @@ export default function StudentView() {
             console.error("Error fetching session notes:", error);
             setSnackbarMessage("Error loading session notes");
             setSnackbarVisible(true);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -1480,121 +1507,143 @@ export default function StudentView() {
 
             <ScrollView style={styles.container}>
                 <View style={styles.contentContainer}>
-                    {/* Grouped Session Notes */}
-                    {organizeNotesByClassAndMonth(sessionNotes).map((classGroup) => (
-                        <View key={classGroup.classId} style={styles.classCard}>
-                            <View
-                                style={[
-                                    styles.classHeader,
-                                    { backgroundColor: getClassHeaderColor(classGroup.classId) }
-                                ]}
-                            >
-                                <Text style={styles.classTitle}>
-                                    {availableClasses.find(c => c.id === classGroup.classId)?.name || 'Unknown Class'}
-                                </Text>
-                            </View>
+                    {loading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color={theme.colors.primary} />
+                            <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+                                Loading session notes...
+                            </Text>
+                        </View>
+                    ) : sessionNotes.length === 0 ? (
+                        <View style={styles.emptyContainer}>
+                            <IconButton
+                                icon="notebook-outline"
+                                size={48}
+                                iconColor={theme.colors.primary}
+                            />
+                            <Text style={[styles.emptyText, { color: theme.colors.text }]}>
+                                No session notes available for this student yet.
+                            </Text>
+                            <Text style={[styles.emptySubtext, { color: theme.colors.text + '88' }]}>
+                                Click the "Add Session Note" button below to create your first note.
+                            </Text>
+                        </View>
+                    ) : (
+                        organizeNotesByClassAndMonth(sessionNotes).map((classGroup) => (
+                            <View key={classGroup.classId} style={styles.classCard}>
+                                <View
+                                    style={[
+                                        styles.classHeader,
+                                        { backgroundColor: getClassHeaderColor(classGroup.classId) }
+                                    ]}
+                                >
+                                    <Text style={styles.classTitle}>
+                                        {availableClasses.find(c => c.id === classGroup.classId)?.name || 'Unknown Class'}
+                                    </Text>
+                                </View>
 
-                            {classGroup.monthlyNotes.map((monthGroup) => {
-                                const monthKey = `${classGroup.classId}-${monthGroup.monthStart}`;
-                                const isCollapsed = collapsedMonths[monthKey];
+                                {classGroup.monthlyNotes.map((monthGroup) => {
+                                    const monthKey = `${classGroup.classId}-${monthGroup.monthStart}`;
+                                    const isCollapsed = collapsedMonths[monthKey];
 
-                                return (
-                                    <View key={monthKey} style={styles.monthSection}>
-                                        <TouchableOpacity
-                                            style={styles.monthHeader}
-                                            onPress={() => toggleMonth(monthKey)}
-                                        >
-                                            <Text style={styles.monthText}>
-                                                {format(new Date(monthGroup.monthStart), "MMMM yyyy")}
-                                            </Text>
-                                            <IconButton
-                                                icon={isCollapsed ? "chevron-down" : "chevron-up"}
-                                                size={24}
-                                            />
-                                        </TouchableOpacity>
-
-                                        {!isCollapsed && monthGroup.notes.map((note) => (
+                                    return (
+                                        <View key={monthKey} style={styles.monthSection}>
                                             <TouchableOpacity
-                                                key={note.id}
-                                                style={styles.sessionCard}
-                                                onPress={() => handleSessionNotePress(note)}
+                                                style={styles.monthHeader}
+                                                onPress={() => toggleMonth(monthKey)}
                                             >
-                                                <View style={styles.cardHeader}>
-                                                    <View style={styles.cardContent}>
-                                                        <Text style={styles.topicTitle}>
-                                                            {note.topic_id ?
-                                                                availableTopics.find(t => t.id === note.topic_id)?.name :
-                                                                note.topic || 'Untitled Topic'}
-                                                        </Text>
-                                                        <Text style={styles.dateText}>
-                                                            {format(new Date(note.session_date), "d MMMM yyyy")}
+                                                <Text style={styles.monthText}>
+                                                    {format(new Date(monthGroup.monthStart), "MMMM yyyy")}
+                                                </Text>
+                                                <IconButton
+                                                    icon={isCollapsed ? "chevron-down" : "chevron-up"}
+                                                    size={24}
+                                                />
+                                            </TouchableOpacity>
+
+                                            {!isCollapsed && monthGroup.notes.map((note) => (
+                                                <TouchableOpacity
+                                                    key={note.id}
+                                                    style={styles.sessionCard}
+                                                    onPress={() => handleSessionNotePress(note)}
+                                                >
+                                                    <View style={styles.cardHeader}>
+                                                        <View style={styles.cardContent}>
+                                                            <Text style={styles.topicTitle}>
+                                                                {note.topic_id ?
+                                                                    availableTopics.find(t => t.id === note.topic_id)?.name :
+                                                                    note.topic || 'Untitled Topic'}
+                                                            </Text>
+                                                            <Text style={styles.dateText}>
+                                                                {format(new Date(note.session_date), "d MMMM yyyy")}
+                                                            </Text>
+                                                        </View>
+                                                        {note.file_url && (
+                                                            <TouchableOpacity onPress={() => handleImagePress(note.file_url!)}>
+                                                                <Image
+                                                                    source={{ uri: note.file_url }}
+                                                                    style={styles.noteImage}
+                                                                />
+                                                            </TouchableOpacity>
+                                                        )}
+                                                    </View>
+
+                                                    <Text>
+                                                        {studentName || 'The student'} was <Text style={{
+                                                            color: note.engagement_level === 'Highly Engaged' ? '#4CAF50' :
+                                                                note.engagement_level === 'Engaged' ? '#FFB700' :
+                                                                    note.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
+                                                        }}>{note.engagement_level.toLowerCase()}</Text> this lesson.
+                                                    </Text>
+
+                                                    {note.tutor_notes && (
+                                                        <Text style={styles.tutorNotes}>{note.tutor_notes}</Text>
+                                                    )}
+
+                                                    <View style={styles.homeworkSection}>
+                                                        <Text style={styles.homeworkTitle}>Homework:</Text>
+                                                        <Text style={styles.homeworkText}>
+                                                            {note.homework_assigned || 'No homework assigned'}
                                                         </Text>
                                                     </View>
-                                                    {note.file_url && (
-                                                        <TouchableOpacity onPress={() => handleImagePress(note.file_url!)}>
-                                                            <Image
-                                                                source={{ uri: note.file_url }}
-                                                                style={styles.noteImage}
-                                                            />
+
+                                                    <View style={styles.proficiencyRow}>
+                                                        <Text style={styles.proficiencyLabel}>Topic Understanding: </Text>
+                                                        <Text style={[styles.proficiencyValue, {
+                                                            color: note.understanding_level === 'Excellent' ? '#4CAF50' :
+                                                                note.understanding_level === 'Good' ? '#FFB700' :
+                                                                    note.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B',
+                                                            textAlign: 'center',
+                                                            marginBottom: 4,
+                                                            fontSize: 16,
+                                                            fontWeight: '500'
+                                                        }]}>
+                                                            {note.understanding_level}
+                                                        </Text>
+                                                    </View>
+
+                                                    <View style={styles.cardActions}>
+                                                        <TouchableOpacity
+                                                            style={[styles.actionButton, styles.editButton]}
+                                                            onPress={() => handleEditSessionNote(note)}
+                                                        >
+                                                            <Text style={styles.editButtonText}>Edit Note</Text>
                                                         </TouchableOpacity>
-                                                    )}
-                                                </View>
-
-                                                <Text>
-                                                    {studentName || 'The student'} was <Text style={{
-                                                        color: note.engagement_level === 'Highly Engaged' ? '#4CAF50' :
-                                                            note.engagement_level === 'Engaged' ? '#FFB700' :
-                                                                note.engagement_level === 'Neutral' ? '#808080' : '#FF4B4B'
-                                                    }}>{note.engagement_level.toLowerCase()}</Text> this lesson.
-                                                </Text>
-
-                                                {note.tutor_notes && (
-                                                    <Text style={styles.tutorNotes}>{note.tutor_notes}</Text>
-                                                )}
-
-                                                <View style={styles.homeworkSection}>
-                                                    <Text style={styles.homeworkTitle}>Homework:</Text>
-                                                    <Text style={styles.homeworkText}>
-                                                        {note.homework_assigned || 'No homework assigned'}
-                                                    </Text>
-                                                </View>
-
-                                                <View style={styles.proficiencyRow}>
-                                                    <Text style={styles.proficiencyLabel}>Topic Understanding: </Text>
-                                                    <Text style={[styles.proficiencyValue, {
-                                                        color: note.understanding_level === 'Excellent' ? '#4CAF50' :
-                                                            note.understanding_level === 'Good' ? '#FFB700' :
-                                                                note.understanding_level === 'Fair' ? '#FFA726' : '#FF4B4B',
-                                                        textAlign: 'center',
-                                                        marginBottom: 4,
-                                                        fontSize: 16,
-                                                        fontWeight: '500'
-                                                    }]}>
-                                                        {note.understanding_level}
-                                                    </Text>
-                                                </View>
-
-                                                <View style={styles.cardActions}>
-                                                    <TouchableOpacity
-                                                        style={[styles.actionButton, styles.editButton]}
-                                                        onPress={() => handleEditSessionNote(note)}
-                                                    >
-                                                        <Text style={styles.editButtonText}>Edit Note</Text>
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity
-                                                        style={[styles.actionButton, styles.deleteButton]}
-                                                        onPress={() => handleDeleteSessionNote(note.id)}
-                                                    >
-                                                        <Text style={styles.deleteButtonText}>Delete</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                );
-                            })}
-                        </View>
-                    ))}
+                                                        <TouchableOpacity
+                                                            style={[styles.actionButton, styles.deleteButton]}
+                                                            onPress={() => handleDeleteSessionNote(note.id)}
+                                                        >
+                                                            <Text style={styles.deleteButtonText}>Delete</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        ))
+                    )}
                 </View>
             </ScrollView>
 
