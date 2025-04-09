@@ -24,32 +24,8 @@ export default function NotificationsBell() {
       // For parents, always navigate to the parent dashboard
       router.push('/parent/dashboard');
     } else {
-      // For tutors, handle different notification types
-      switch (notification.type) {
-        case 'session_note':
-          // Navigate to the class details page
-          router.push({
-            pathname: '/tutor/classes/[id]',
-            params: { id: notification.recipient_id }
-          });
-          break;
-        case 'parent_feedback':
-          // Navigate to the student's session notes page
-          // The recipient_id in this case is the student_id
-          router.push({
-            pathname: '/student/[id]',
-            params: { id: notification.recipient_id }
-          });
-          break;
-        case 'weekly_reminder':
-          // Navigate to the tutor dashboard
-          router.push('/tutor/dashboard');
-          break;
-        default:
-          // For any other notification type, go to dashboard
-          router.push('/tutor/dashboard');
-          break;
-      }
+      // For tutors, always navigate to the tutor dashboard
+      router.push('/tutor/dashboard');
     }
     
     setVisible(false);
